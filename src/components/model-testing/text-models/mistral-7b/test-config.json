@@ -1,0 +1,50 @@
+{
+  "model": {
+    "name": "mistralai/Mistral-7B-Instruct-v0.2",
+    "provider": "huggingface",
+    "endpoint": "https://router.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2"
+  },
+  "testCases": [
+    {
+      "id": "qa-1",
+      "name": "Basic Question Answering",
+      "input": "What is artificial intelligence? Provide a brief explanation.",
+      "expectedOutput": "Should contain explanation of AI",
+      "expectedKeywords": ["artificial intelligence", "computer", "intelligence", "tasks"],
+      "maxDuration": 10000
+    },
+    {
+      "id": "summarize-1",
+      "name": "Text Summarization",
+      "input": "Artificial intelligence (AI) is transforming the way we work and live. Machine learning algorithms can now process vast amounts of data to identify patterns and make predictions. Natural language processing enables computers to understand and generate human language. Computer vision allows machines to interpret visual information. These technologies are being applied across industries from healthcare to finance to transportation.",
+      "expectedOutput": "Should be a concise summary (1-2 sentences)",
+      "expectedKeywords": ["AI", "machine learning", "industries"],
+      "maxDuration": 15000
+    },
+    {
+      "id": "extract-1",
+      "name": "Information Extraction",
+      "input": "Meeting Details: Date: March 15, 2024, Time: 2:00 PM, Location: Conference Room A, Attendees: John Smith, Jane Doe, Bob Johnson, Topic: Q1 Product Launch Planning",
+      "expectedOutput": "Should extract structured information",
+      "expectedKeywords": ["March 15", "2:00 PM", "Conference Room A", "John Smith", "Jane Doe"],
+      "maxDuration": 12000
+    },
+    {
+      "id": "translate-1",
+      "name": "Translation",
+      "input": "Bonjour, comment allez-vous? Je m'appelle Marie.",
+      "expectedOutput": "Hello, how are you? My name is Marie.",
+      "expectedKeywords": ["Hello", "how are you", "My name is", "Marie"],
+      "maxDuration": 10000
+    },
+    {
+      "id": "analyze-1",
+      "name": "Data Analysis",
+      "input": "Sales Report Q1 2024: January: $50,000, February: $65,000, March: $80,000, Total: $195,000. Analyze the trend.",
+      "expectedOutput": "Should identify upward trend and provide analysis",
+      "expectedKeywords": ["trend", "increase", "growth", "January", "February", "March"],
+      "maxDuration": 15000
+    }
+  ]
+}
+

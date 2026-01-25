@@ -1,0 +1,12 @@
+tunnel: f8dffe0b-25b2-4101-8b3a-2e92733b0c58
+credentials-file: C:\Users\User\.cloudflared\f8dffe0b-25b2-4101-8b3a-2e92733b0c58.json
+
+ingress:
+  # FastAPI Backend - Secure Proxy (port 8000)
+  # This is the ONLY service exposed via Cloudflare
+  # Ollama (port 11434) is NOT exposed - only accessible via FastAPI proxy
+  - hostname: coverage-francis-distributor-sauce.trycloudflare.com
+    service: http://localhost:8000
+  
+  # Catch-all rule (must be last)
+  - service: http_status:404

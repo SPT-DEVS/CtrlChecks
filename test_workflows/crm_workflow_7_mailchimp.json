@@ -1,0 +1,66 @@
+{
+  "name": "Test Mailchimp - List Audiences",
+  "description": "Test workflow for Mailchimp CRM node - List audiences operation",
+  "nodes": [
+    {
+      "id": "node_1",
+      "type": "custom",
+      "position": { "x": 100, "y": 100 },
+      "data": {
+        "type": "manual_trigger",
+        "label": "Manual Trigger",
+        "category": "triggers",
+        "icon": "Play",
+        "config": {}
+      }
+    },
+    {
+      "id": "node_2",
+      "type": "custom",
+      "position": { "x": 300, "y": 100 },
+      "data": {
+        "type": "mailchimp",
+        "label": "Mailchimp",
+        "category": "crm",
+        "icon": "Mail",
+        "config": {
+          "apiKey": "your-api-key",
+          "dataCenter": "us1",
+          "resource": "audience",
+          "operation": "list",
+          "count": 10,
+          "offset": 0
+        }
+      }
+    },
+    {
+      "id": "node_3",
+      "type": "custom",
+      "position": { "x": 500, "y": 100 },
+      "data": {
+        "type": "log_output",
+        "label": "Log Output",
+        "category": "output",
+        "icon": "FileOutput",
+        "config": {
+          "message": "Mailchimp Audiences: {{audiences}}",
+          "level": "info"
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_1",
+      "source": "node_1",
+      "target": "node_2"
+    },
+    {
+      "id": "edge_2",
+      "source": "node_2",
+      "target": "node_3"
+    }
+  ],
+  "viewport": { "x": 0, "y": 0, "zoom": 1 }
+}
+
