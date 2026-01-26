@@ -141,8 +141,28 @@ function WorkflowCanvasInner() {
       // Use 'form' node type for Form Trigger, 'custom' for others
       const nodeType = nodeData.type === 'form' ? 'form' : 'custom';
 
+      // Generate unique ID by checking existing nodes
+      // Use crypto.randomUUID if available for better uniqueness
+      const existingIds = new Set(nodes.map(n => n.id));
+      let nodeId: string;
+      let counter = 0;
+      const maxAttempts = 100;
+      do {
+        if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+          nodeId = `${nodeData.type}_${crypto.randomUUID()}`;
+        } else {
+          const timestamp = Date.now();
+          const random = Math.random().toString(36).substring(2, 15);
+          nodeId = `${nodeData.type}_${timestamp}_${counter}_${random}`;
+        }
+        counter++;
+        if (counter > maxAttempts) {
+          throw new Error('Failed to generate unique node ID after maximum attempts');
+        }
+      } while (existingIds.has(nodeId));
+
       const newNode: Node<NodeData> = {
-        id: `${nodeData.type}_${Date.now()}`,
+        id: nodeId,
         type: nodeType,
         position,
         data: {
@@ -156,7 +176,7 @@ function WorkflowCanvasInner() {
 
       addNode(newNode);
     },
-    [screenToFlowPosition, addNode]
+    [screenToFlowPosition, addNode, nodes]
   );
 
   const onNodeClick = useCallback(
@@ -227,9 +247,16 @@ function WorkflowCanvasInner() {
     };
   });
 
+  // Generate a key based on node IDs to force re-render when workflow changes
+  // This ensures React Flow resets completely when switching workflows
+  const workflowKey = nodes.length > 0 
+    ? nodes.map(n => n.id).sort().join(',') 
+    : 'empty';
+
   return (
-    <div ref={reactFlowWrapper} className="flex-1 h-full">
+    <div ref={reactFlowWrapper} className="w-full h-full" style={{ width: '100%', height: '100%' }}>
       <ReactFlow
+        key={workflowKey}
         nodes={nodes}
         edges={styledEdges}
         onNodesChange={onNodesChange}

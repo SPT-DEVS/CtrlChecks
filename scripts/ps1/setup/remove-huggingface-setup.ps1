@@ -35,9 +35,9 @@ Write-Host "   Audio processing will use alternative methods" -ForegroundColor Y
 
 Write-Host ""
 
-# 2. Update requirements.txt to remove Hugging Face packages
-Write-Host "2. Updating requirements.txt..." -ForegroundColor Yellow
-$reqPath = "AI_Agent\multimodal_backend\requirements.txt"
+# 2. Update requirements.txt to remove Hugging Face packages (if needed)
+Write-Host "2. Checking requirements files..." -ForegroundColor Yellow
+$reqPath = "..\Fast_API_Ollama\requirements.txt"
 if (Test-Path $reqPath) {
     $content = Get-Content $reqPath -Raw
     # Comment out Hugging Face dependencies
@@ -87,7 +87,7 @@ aiohttp>=3.9.0
 # torch>=2.0.0  # Optional - only if needed for other features
 "@
 
-$newReqPath = "AI_Agent\multimodal_backend\requirements-ollama-only.txt"
+$newReqPath = "..\Fast_API_Ollama\requirements-ollama-only.txt"
 Set-Content -Path $newReqPath -Value $ollamaOnlyReqs -Encoding UTF8
 Write-Host "   Created: requirements-ollama-only.txt" -ForegroundColor Green
 
@@ -109,5 +109,7 @@ Write-Host "  - Text-to-image generation requires Hugging Face (Ollama doesn't s
 Write-Host "  - Text and Image processing now use Ollama only" -ForegroundColor White
 Write-Host ""
 Write-Host "To install Ollama-only dependencies:" -ForegroundColor Cyan
-Write-Host "  cd AI_Agent\multimodal_backend" -ForegroundColor White
+Write-Host "  cd ..\Fast_API_Ollama" -ForegroundColor White
 Write-Host "  pip install -r requirements-ollama-only.txt" -ForegroundColor White
+Write-Host ""
+Write-Host "Note: Fast_API_Ollama already uses Ollama only - this script may not be needed." -ForegroundColor Yellow

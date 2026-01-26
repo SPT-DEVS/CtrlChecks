@@ -21,7 +21,7 @@ import { workflowScheduler } from '@/lib/workflowScheduler';
 
 interface WorkflowHeaderProps {
   onSave: () => void;
-  onRun: () => void;
+  onRun: (autoSave?: boolean) => void;
   isSaving?: boolean;
   isRunning?: boolean;
   onImport?: (data: any) => void;
@@ -230,10 +230,25 @@ export default function WorkflowHeader({
           {isSaving ? 'Saving...' : 'Save'}
         </Button>
 
+        {isDirty && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-primary/50 text-primary hover:bg-primary/10"
+            onClick={() => onRun(true)}
+            disabled={isRunning || isSaving || isScheduleActive}
+            title={isScheduleActive ? 'Manual Run is disabled when schedule is active' : 'Save and run workflow'}
+          >
+            <Save className="mr-2 h-4 w-4" />
+            <Play className="mr-2 h-4 w-4" />
+            Save & Run
+          </Button>
+        )}
+
         <Button
           size="sm"
           className="gradient-primary text-primary-foreground"
-          onClick={onRun}
+          onClick={() => onRun(false)}
           disabled={isRunning || isScheduleActive}
           title={isScheduleActive ? 'Manual Run is disabled when schedule is active' : undefined}
         >

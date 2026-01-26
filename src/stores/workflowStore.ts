@@ -337,10 +337,31 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
 
     const newUndoStack = [...get().undoStack, { nodes: [...nodes], edges: [...edges] }];
 
-    // Create new node with new ID and offset position
+    // Generate unique ID by checking existing nodes
+    // Use crypto.randomUUID if available for better uniqueness
+    const existingIds = new Set(nodes.map(n => n.id));
+    let nodeId: string;
+    let counter = 0;
+    const maxAttempts = 100;
+    const nodeType = copiedNode.data?.type || copiedNode.type || 'node';
+    do {
+      if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+        nodeId = `${nodeType}_copy_${crypto.randomUUID()}`;
+      } else {
+        const timestamp = Date.now();
+        const random = Math.random().toString(36).substring(2, 15);
+        nodeId = `${nodeType}_copy_${timestamp}_${counter}_${random}`;
+      }
+      counter++;
+      if (counter > maxAttempts) {
+        throw new Error('Failed to generate unique node ID after maximum attempts');
+      }
+    } while (existingIds.has(nodeId));
+
+    // Create new node with unique ID and offset position
     const newNode: WorkflowNode = {
       ...copiedNode,
-      id: `${copiedNode.type}_${Date.now()}`,
+      id: nodeId,
       position: {
         x: copiedNode.position.x + 50,
         y: copiedNode.position.y + 50,
@@ -371,15 +392,19 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   setWorkflowName: (name) => set({ workflowName: name, isDirty: true }),
   setIsDirty: (dirty) => set({ isDirty: dirty }),
 
-  resetWorkflow: () => set({
-    nodes: [],
-    edges: [],
-    selectedNode: null,
-    selectedEdge: null,
-    workflowId: null,
-    workflowName: 'Untitled Workflow',
-    isDirty: false,
-    undoStack: [],
-    redoStack: [],
-  }),
+  resetWorkflow: () => {
+    // CRITICAL: Completely reset all state to prevent stale data
+    set({
+      nodes: [],
+      edges: [],
+      selectedNode: null,
+      selectedEdge: null,
+      workflowId: null,
+      workflowName: 'Untitled Workflow',
+      isDirty: false,
+      undoStack: [],
+      redoStack: [],
+      copiedNode: null,
+    });
+  },
 }));

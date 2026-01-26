@@ -3,9 +3,9 @@
 
 # Get project root (two levels up from scripts/ps1/start/)
 $projectRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))
-$ollamaBackendPath = Join-Path $projectRoot "AI_Agent\ollama_backend"
+$fastApiOllamaPath = Join-Path $projectRoot "Fast_API_Ollama"
 
-Write-Host "🚀 Starting Ollama Backend with LOCALHOST Ollama..." -ForegroundColor Green
+Write-Host "🚀 Starting Fast_API_Ollama with LOCALHOST Ollama..." -ForegroundColor Green
 Write-Host "Project root: $projectRoot" -ForegroundColor Gray
 Write-Host ""
 
@@ -23,16 +23,11 @@ try {
 }
 
 Write-Host ""
-Write-Host "📝 Setting OLLAMA_BASE_URL to localhost..." -ForegroundColor Cyan
-$env:OLLAMA_BASE_URL = "http://localhost:11434"
-Write-Host "   ✅ OLLAMA_BASE_URL=http://localhost:11434" -ForegroundColor Green
-
-Write-Host ""
-Write-Host "🌐 Starting FastAPI server on http://localhost:8000" -ForegroundColor Cyan
+Write-Host "🌐 Starting Fast_API_Ollama on http://localhost:8000" -ForegroundColor Cyan
 Write-Host ""
 
-# Change to backend directory
-Set-Location $ollamaBackendPath
+# Change to Fast_API_Ollama directory
+Set-Location $fastApiOllamaPath
 
 # Activate virtual environment if it exists
 if (Test-Path "venv\Scripts\Activate.ps1") {
@@ -40,8 +35,7 @@ if (Test-Path "venv\Scripts\Activate.ps1") {
     & .\venv\Scripts\Activate.ps1
 }
 
-# Start uvicorn with localhost Ollama
+# Start uvicorn
 Write-Host "🚀 Starting server..." -ForegroundColor Green
-Write-Host "   OLLAMA_BASE_URL: $env:OLLAMA_BASE_URL" -ForegroundColor Gray
 Write-Host ""
-uvicorn src.api.endpoints:app --host 0.0.0.0 --port 8000 --reload
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload

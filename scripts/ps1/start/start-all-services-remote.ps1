@@ -42,32 +42,41 @@ if (-not $tunnelProcess) {
     Write-Host "   ✅ Cloudflare Tunnel is already running" -ForegroundColor Green
 }
 
-# Step 3: Start Ollama Backend (Port 8000)
+# Step 3: Start Fast_API_Ollama (Port 8000)
 Write-Host ""
-Write-Host "3️⃣  Starting Ollama Backend (Port 8000)..." -ForegroundColor Yellow
-$backendPath = Join-Path $projectRoot "AI_Agent\ollama_backend"
-if (Test-Path $backendPath) {
-    $venvPath = Join-Path $backendPath "venv\Scripts\Activate.ps1"
+Write-Host "3️⃣  Starting Fast_API_Ollama (Port 8000)..." -ForegroundColor Yellow
+$fastApiPath = Join-Path $projectRoot "Fast_API_Ollama"
+if (Test-Path $fastApiPath) {
+    $venvPath = Join-Path $fastApiPath "venv\Scripts\Activate.ps1"
     if (Test-Path $venvPath) {
-        Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$backendPath'; .\venv\Scripts\Activate.ps1; Write-Host '🚀 Ollama Backend' -ForegroundColor Green; Write-Host 'Running on: http://localhost:8000' -ForegroundColor Cyan; Write-Host 'OLLAMA_BASE_URL: $remoteUrl' -ForegroundColor Yellow; `$env:OLLAMA_BASE_URL='$remoteUrl'; uvicorn src.api.endpoints:app --host 0.0.0.0 --port 8000 --reload" -WindowStyle Normal
-        Write-Host "   ✅ Started Ollama Backend in new window" -ForegroundColor Green
+        Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$fastApiPath'; .\venv\Scripts\Activate.ps1; Write-Host '🚀 Fast_API_Ollama' -ForegroundColor Green; Write-Host 'Running on: http://localhost:8000' -ForegroundColor Cyan; Write-Host 'OLLAMA_URL: $remoteUrl' -ForegroundColor Yellow; `$env:OLLAMA_URL='$remoteUrl'; uvicorn main:app --host 0.0.0.0 --port 8000 --reload" -WindowStyle Normal
+        Write-Host "   ✅ Started Fast_API_Ollama in new window" -ForegroundColor Green
     } else {
         Write-Host "   ⚠️  Virtual environment not found. Starting without venv..." -ForegroundColor Yellow
-        Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$backendPath'; Write-Host '🚀 Ollama Backend' -ForegroundColor Green; `$env:OLLAMA_BASE_URL='$remoteUrl'; uvicorn src.api.endpoints:app --host 0.0.0.0 --port 8000 --reload" -WindowStyle Normal
+        Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$fastApiPath'; Write-Host '🚀 Fast_API_Ollama' -ForegroundColor Green; `$env:OLLAMA_URL='$remoteUrl'; uvicorn main:app --host 0.0.0.0 --port 8000 --reload" -WindowStyle Normal
     }
     Start-Sleep -Seconds 2
 } else {
-    Write-Host "   ⚠️  Ollama Backend directory not found" -ForegroundColor Yellow
+    Write-Host "   ⚠️  Fast_API_Ollama directory not found" -ForegroundColor Yellow
 }
 
-# Step 4: Start Multimodal Backend (Port 8501)
+# Step 4: Start Worker (Port 8001)
 Write-Host ""
-Write-Host "4️⃣  Starting Multimodal Backend (Port 8501)..." -ForegroundColor Yellow
-$multimodalPath = Join-Path $projectRoot "AI_Agent\multimodal_backend"
-if (Test-Path $multimodalPath) {
-    Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$multimodalPath'; Write-Host '🚀 Multimodal Backend' -ForegroundColor Green; Write-Host 'Running on: http://localhost:8501' -ForegroundColor Cyan; Write-Host 'OLLAMA_BASE_URL: $remoteUrl' -ForegroundColor Yellow; `$env:OLLAMA_BASE_URL='$remoteUrl'; python main.py" -WindowStyle Normal
-    Write-Host "   ✅ Started Multimodal Backend in new window" -ForegroundColor Green
+Write-Host "4️⃣  Starting Worker (Port 8001)..." -ForegroundColor Yellow
+$workerPath = Join-Path $projectRoot "worker"
+if (Test-Path $workerPath) {
+    $venvPath = Join-Path $workerPath "venv\Scripts\Activate.ps1"
+    if (Test-Path $venvPath) {
+        Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$workerPath'; .\venv\Scripts\Activate.ps1; Write-Host '🚀 Worker' -ForegroundColor Green; Write-Host 'Running on: http://localhost:8001' -ForegroundColor Cyan; Write-Host 'OLLAMA_BASE_URL: $remoteUrl' -ForegroundColor Yellow; `$env:OLLAMA_BASE_URL='$remoteUrl'; uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload" -WindowStyle Normal
+        Write-Host "   ✅ Started Worker in new window" -ForegroundColor Green
+    } else {
+        Write-Host "   ⚠️  Virtual environment not found. Starting without venv..." -ForegroundColor Yellow
+        Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$workerPath'; Write-Host '🚀 Worker' -ForegroundColor Green; `$env:OLLAMA_BASE_URL='$remoteUrl'; uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload" -WindowStyle Normal
+    }
     Start-Sleep -Seconds 2
+} else {
+    Write-Host "   ⚠️  Worker directory not found" -ForegroundColor Yellow
+}
 } else {
     Write-Host "   ⚠️  Multimodal Backend directory not found" -ForegroundColor Yellow
 }

@@ -62,9 +62,16 @@ export default function ExecutionConsole({ isExpanded, onToggle }: ExecutionCons
         }
         throw error;
       }
-      setExecutions(data || []);
-      if (data && data.length > 0 && !selectedExecution) {
-        setSelectedExecution(data[0]);
+      // Deduplicate executions by ID
+      const uniqueExecutions = (data || []).reduce((acc: Execution[], exec: Execution) => {
+        if (!acc.find(e => e.id === exec.id)) {
+          acc.push(exec);
+        }
+        return acc;
+      }, []);
+      setExecutions(uniqueExecutions);
+      if (uniqueExecutions.length > 0 && !selectedExecution) {
+        setSelectedExecution(uniqueExecutions[0]);
       }
     } catch (error) {
       console.error('Error loading executions:', error);
@@ -105,7 +112,16 @@ export default function ExecutionConsole({ isExpanded, onToggle }: ExecutionCons
 
           if (payload.eventType === 'INSERT') {
             const newExecution = payload.new as Execution;
-            setExecutions(prev => [newExecution, ...prev.slice(0, 9)]);
+            setExecutions(prev => {
+              // Deduplicate: check if execution already exists
+              const exists = prev.some(exec => exec.id === newExecution.id);
+              if (exists) {
+                // If it exists, update it instead of adding
+                return prev.map(exec => exec.id === newExecution.id ? newExecution : exec);
+              }
+              // Add new execution at the beginning, limit to 10
+              return [newExecution, ...prev.filter(exec => exec.id !== newExecution.id)].slice(0, 10);
+            });
             // Reset all node statuses when a new execution starts
             resetAllNodeStatuses();
             // Reset execution ID tracking to trigger status reset
@@ -115,9 +131,19 @@ export default function ExecutionConsole({ isExpanded, onToggle }: ExecutionCons
             // Auto-expand console if collapsed (triggered from parent)
           } else if (payload.eventType === 'UPDATE') {
             const updatedExecution = payload.new as Execution;
-            setExecutions(prev =>
-              prev.map(exec => exec.id === updatedExecution.id ? updatedExecution : exec)
-            );
+            setExecutions(prev => {
+              // Deduplicate: ensure we don't have duplicates
+              const seen = new Set<string>();
+              return prev
+                .map(exec => exec.id === updatedExecution.id ? updatedExecution : exec)
+                .filter(exec => {
+                  if (seen.has(exec.id)) {
+                    return false;
+                  }
+                  seen.add(exec.id);
+                  return true;
+                });
+            });
             // Always update selected execution if it's the one being updated
             if (selectedExecutionRef.current?.id === updatedExecution.id) {
               setSelectedExecution(updatedExecution);

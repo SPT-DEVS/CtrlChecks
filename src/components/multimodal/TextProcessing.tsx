@@ -25,8 +25,6 @@ import mammoth from 'mammoth';
 // For pdfjs-dist 5.x, use the .mjs worker file
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
-import { ENDPOINTS } from '@/config/endpoints';
-
 const PYTHON_BACKEND_URL = ENDPOINTS.itemBackend;
 const USE_DIRECT_BACKEND = ENDPOINTS.useDirectBackend;
 
@@ -227,7 +225,7 @@ export default function TextProcessing({ selectedTools }: TextProcessingProps = 
                     if (err.message?.includes('Failed to fetch') || err.message?.includes('ERR_CONNECTION_REFUSED')) {
                         errorMessage = `Cannot connect to Python backend at ${PYTHON_BACKEND_URL}. ` +
                             `Please ensure the backend is running. ` +
-                            `Start it with: cd AI_Agent\\multimodal_backend && python main.py`;
+                            `Start it with: cd Fast_API_Ollama && uvicorn main:app --host 0.0.0.0 --port 8000 --reload`;
                     } else if (err.message?.includes('JSON')) {
                         errorMessage = `Backend returned invalid response: ${err.message}`;
                     }
@@ -305,7 +303,7 @@ export default function TextProcessing({ selectedTools }: TextProcessingProps = 
                     {/* Input Area */}
                     <div className="space-y-2">
                         <div className="flex justify-between items-center">
-                            <label className="text-sm font-medium">Input Text / Context</label>
+                            <label htmlFor="text-processing-input" className="text-sm font-medium">Input Text / Context</label>
                             <Button
                                 variant="outline"
                                 size="sm"
@@ -317,12 +315,16 @@ export default function TextProcessing({ selectedTools }: TextProcessingProps = 
                             <input
                                 ref={fileInputRef}
                                 type="file"
+                                id="text-processing-file-input"
+                                name="text-processing-file-input"
                                 accept=".txt,.md,.pdf,.doc,.docx,.csv,.json,.xml,.html,.css,.js,.ts,.jsx,.tsx,.py,.log,.ini,.conf,.yml,.yaml,.rtf,.sh,.bat,.cmd,.ps1,.env"
                                 className="hidden"
                                 onChange={handleFileSelect}
                             />
                         </div>
                         <Textarea
+                            id="text-processing-input"
+                            name="text-processing-input"
                             placeholder="Enter text to process here..."
                             value={inputText}
                             onChange={(e) => setInputText(e.target.value)}

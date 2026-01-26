@@ -242,9 +242,12 @@ export default function DynamicUIRenderer({ template, pipeline, executionEngine 
                     );
                   } else if (component.type === 'textarea') {
                     const inputKey = `input_${index}_${compIdx}`;
+                    const textareaId = `dynamic-textarea-${index}-${compIdx}`;
                     return (
                       <Textarea
                         key={compIdx}
+                        id={textareaId}
+                        name={textareaId}
                         placeholder={component.placeholder || 'Enter your text here...'}
                         rows={component.rows || 5}
                         value={inputValues[inputKey] || ''}
@@ -262,6 +265,8 @@ export default function DynamicUIRenderer({ template, pipeline, executionEngine 
                         {/* Always show textarea for prompts (e.g., image generation) */}
                         {!hasTextInput && (
                           <Textarea
+                            id={`dynamic-image-prompt-${index}-${compIdx}`}
+                            name={`dynamic-image-prompt-${index}-${compIdx}`}
                             placeholder="Enter your prompt or description here... (e.g., 'a futuristic city')"
                             rows={4}
                             value={inputValues[inputKey] || ''}

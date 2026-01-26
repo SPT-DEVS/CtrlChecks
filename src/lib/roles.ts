@@ -62,6 +62,8 @@ export async function isModerator(): Promise<boolean> {
 
 /**
  * Get current user's role
+ * Returns the highest priority role if user has multiple roles
+ * Priority: admin > moderator > user
  */
 export async function getUserRole(): Promise<AppRole | null> {
   try {
@@ -72,8 +74,7 @@ export async function getUserRole(): Promise<AppRole | null> {
     const { data, error } = await supabase
       .from('user_roles')
       .select('role')
-      .eq('user_id', user.id)
-      .single();
+      .eq('user_id', user.id);
 
     // Handle 406 errors gracefully (RLS policy may not be set up yet)
     if (error) {
@@ -92,9 +93,22 @@ export async function getUserRole(): Promise<AppRole | null> {
       return null;
     }
 
-    if (!data) return null;
+    if (!data || data.length === 0) return null;
 
-    return data.role;
+    // If user has multiple roles, return the highest priority one
+    // Priority: admin > moderator > user
+    const rolePriority: Record<AppRole, number> = {
+      admin: 3,
+      moderator: 2,
+      user: 1,
+    };
+
+    // Sort by priority (highest first) and return the first one
+    const sortedRoles = data
+      .map(item => item.role)
+      .sort((a, b) => rolePriority[b] - rolePriority[a]);
+
+    return sortedRoles[0] || null;
   } catch (error) {
     console.error('Error getting user role:', error);
     return null;

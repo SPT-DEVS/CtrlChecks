@@ -14,7 +14,7 @@ try {
     }
 } catch {
     Write-Host "   [FAIL] Ollama backend is NOT running" -ForegroundColor Red
-    Write-Host "   Start it: cd AI_Agent\ollama_backend && .\venv\Scripts\Activate.ps1 && uvicorn src.api.endpoints:app --host 0.0.0.0 --port 8000" -ForegroundColor Yellow
+    Write-Host "   Start it: cd ..\Fast_API_Ollama && uvicorn main:app --host 0.0.0.0 --port 8000 --reload" -ForegroundColor Yellow
 }
 
 # Test 2: List Models
@@ -105,7 +105,7 @@ try {
     }
 } catch {
     Write-Host "   [WARN] Python backend is NOT running (optional for Ollama testing)" -ForegroundColor Yellow
-    Write-Host "   Start it: cd AI_Agent\multimodal_backend && python main.py" -ForegroundColor Gray
+    Write-Host "   Start it: cd ..\Fast_API_Ollama && uvicorn main:app --host 0.0.0.0 --port 8000 --reload" -ForegroundColor Gray
 }
 
 # Test 6: Frontend

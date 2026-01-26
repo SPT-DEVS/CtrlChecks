@@ -20,6 +20,7 @@ import { ArrowLeft, Save } from 'lucide-react';
 import { Edge } from '@xyflow/react';
 import { Json } from '@/integrations/supabase/types';
 import { updateTemplate } from '@/lib/api/admin';
+import { validateAndFixWorkflow } from '@/lib/workflowValidation';
 
 export default function TemplateEditor() {
   const { id } = useParams();
@@ -59,8 +60,15 @@ export default function TemplateEditor() {
       if (data) {
         setTemplateData(data);
         setWorkflowName(data.name);
-        setNodes((data.nodes as unknown as WorkflowNode[]) || []);
-        setEdges((data.edges as unknown as Edge[]) || []);
+        
+        // CRITICAL: Normalize and regenerate IDs to ensure uniqueness
+        const normalized = validateAndFixWorkflow({
+          nodes: (data.nodes as unknown as WorkflowNode[]) || [],
+          edges: (data.edges as unknown as Edge[]) || []
+        });
+        
+        setNodes(normalized.nodes);
+        setEdges(normalized.edges);
         setIsDirty(false);
       }
     } catch (error) {
@@ -147,7 +155,7 @@ export default function TemplateEditor() {
         <div className="w-64 border-r border-border overflow-y-auto">
           <NodeLibrary onDragStart={onDragStart} />
         </div>
-        <div className="flex-1 relative">
+        <div className="flex-1 relative w-full h-full" style={{ minWidth: 0, minHeight: 0 }}>
           <WorkflowCanvas />
         </div>
         <div className="w-80 border-l border-border overflow-y-auto">

@@ -139,35 +139,38 @@ Write-Host ""
 
 $remoteUrl = "https://diego-ski-deutsche-choir.trycloudflare.com"
 
-# Multimodal Backend .env
-$multimodalEnvPath = Join-Path $projectRoot "AI_Agent\multimodal_backend\.env"
-$multimodalEnvContent = "# Remote Ollama Configuration`nOLLAMA_BASE_URL=$remoteUrl`n"
+# Fast_API_Ollama .env
+$fastApiEnvPath = Join-Path $projectRoot "Fast_API_Ollama\.env"
+$fastApiEnvContent = "# Remote Ollama Configuration`nOLLAMA_URL=$remoteUrl`nPORT=8000`nALLOWED_ORIGINS=*`n"
 
-if (Test-Path $multimodalEnvPath) {
-    Write-Host "   Info: .env file exists at: $multimodalEnvPath" -ForegroundColor Gray
-    $existing = Get-Content $multimodalEnvPath -Raw
-    if ($existing -match "OLLAMA_BASE_URL") {
-        $existing = $existing -replace "OLLAMA_BASE_URL=.*", "OLLAMA_BASE_URL=$remoteUrl"
-        Set-Content -Path $multimodalEnvPath -Value $existing -NoNewline
-        Write-Host "   Updated OLLAMA_BASE_URL in existing .env" -ForegroundColor Green
+if (Test-Path $fastApiEnvPath) {
+    Write-Host "   Info: .env file exists at: $fastApiEnvPath" -ForegroundColor Gray
+    $existing = Get-Content $fastApiEnvPath -Raw
+    if ($existing -match "OLLAMA_URL") {
+        $existing = $existing -replace "OLLAMA_URL=.*", "OLLAMA_URL=$remoteUrl"
+        Set-Content -Path $fastApiEnvPath -Value $existing -NoNewline
+        Write-Host "   Updated OLLAMA_URL in existing .env" -ForegroundColor Green
     } else {
-        Add-Content -Path $multimodalEnvPath -Value "`n$multimodalEnvContent"
-        Write-Host "   Added OLLAMA_BASE_URL to existing .env" -ForegroundColor Green
+        Add-Content -Path $fastApiEnvPath -Value "`n$fastApiEnvContent"
+        Write-Host "   Added OLLAMA_URL to existing .env" -ForegroundColor Green
     }
 } else {
-    Set-Content -Path $multimodalEnvPath -Value $multimodalEnvContent
-    Write-Host "   Created .env file at: $multimodalEnvPath" -ForegroundColor Green
+    Set-Content -Path $fastApiEnvPath -Value $fastApiEnvContent
+    Write-Host "   Created .env file at: $fastApiEnvPath" -ForegroundColor Green
 }
 
-# Ollama Backend .env (optional - uses localhost for backend, but can use remote)
-$ollamaBackendEnvPath = Join-Path $projectRoot "AI_Agent\ollama_backend\.env"
-$ollamaBackendEnvContent = "# Remote Ollama Configuration (for backend to connect to)`nOLLAMA_BASE_URL=$remoteUrl`n"
-
-if (Test-Path $ollamaBackendEnvPath) {
-    Write-Host "   Info: .env file exists at: $ollamaBackendEnvPath" -ForegroundColor Gray
+# Worker .env
+$workerEnvPath = Join-Path $projectRoot "worker\.env"
+if (Test-Path $workerEnvPath) {
+    Write-Host "   Info: Worker .env file exists at: $workerEnvPath" -ForegroundColor Gray
+    $existing = Get-Content $workerEnvPath -Raw
+    if ($existing -match "OLLAMA_BASE_URL") {
+        $existing = $existing -replace "OLLAMA_BASE_URL=.*", "OLLAMA_BASE_URL=$remoteUrl"
+        Set-Content -Path $workerEnvPath -Value $existing -NoNewline
+        Write-Host "   Updated OLLAMA_BASE_URL in worker .env" -ForegroundColor Green
+    }
 } else {
-    Set-Content -Path $ollamaBackendEnvPath -Value $ollamaBackendEnvContent
-    Write-Host "   Created .env file at: $ollamaBackendEnvPath" -ForegroundColor Green
+    Write-Host "   Note: Worker .env file not found. Copy from env.example if needed." -ForegroundColor Yellow
 }
 
 Write-Host ""
@@ -187,12 +190,12 @@ Write-Host ""
 Write-Host "   1. Start all services:" -ForegroundColor White
 Write-Host "      .\scripts\ps1\start\start-all-services-remote.ps1" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "   2. Or start manually:" -ForegroundColor White
-Write-Host "      Terminal 1: ollama serve" -ForegroundColor Gray
-Write-Host "      Terminal 2: .\scripts\ps1\start\start-cloudflare-tunnel.ps1" -ForegroundColor Gray
-Write-Host "      Terminal 3: cd AI_Agent\ollama_backend && uvicorn src.api.endpoints:app --host 0.0.0.0 --port 8000" -ForegroundColor Gray
-Write-Host "      Terminal 4: cd AI_Agent\multimodal_backend && python main.py" -ForegroundColor Gray
-Write-Host "      Terminal 5: npm run dev" -ForegroundColor Gray
+    Write-Host "   2. Or start manually:" -ForegroundColor White
+    Write-Host "      Terminal 1: ollama serve" -ForegroundColor Gray
+    Write-Host "      Terminal 2: .\scripts\ps1\start\start-cloudflare-tunnel.ps1" -ForegroundColor Gray
+    Write-Host "      Terminal 3: cd ..\Fast_API_Ollama && uvicorn main:app --host 0.0.0.0 --port 8000 --reload" -ForegroundColor Gray
+    Write-Host "      Terminal 4: cd ..\worker && uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload" -ForegroundColor Gray
+    Write-Host "      Terminal 5: npm run dev" -ForegroundColor Gray
 Write-Host ""
 Write-Host "   3. Test the setup:" -ForegroundColor White
 Write-Host "      .\scripts\ps1\test\test-remote-url.ps1" -ForegroundColor Cyan

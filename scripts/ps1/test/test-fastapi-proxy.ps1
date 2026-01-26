@@ -31,7 +31,7 @@ try {
     Write-Host "   FastAPI backend is running" -ForegroundColor Green
 } catch {
     Write-Host "   FastAPI backend is NOT running: $_" -ForegroundColor Red
-    Write-Host "   Start backend: cd AI_Agent\ollama_backend && uvicorn src.api.endpoints:app --host 0.0.0.0 --port 8000" -ForegroundColor Yellow
+    Write-Host "   Start backend: cd ..\Fast_API_Ollama && uvicorn main:app --host 0.0.0.0 --port 8000 --reload" -ForegroundColor Yellow
     $allTestsPassed = $false
     exit 1
 }

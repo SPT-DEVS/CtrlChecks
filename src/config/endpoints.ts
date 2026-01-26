@@ -21,8 +21,10 @@ const ensureProtocol = (url: string): string => {
 };
 
 export const ENDPOINTS = {
-    // The main backend URL (FastAPI)
-    itemBackend: ensureProtocol(getEnvVar('VITE_PYTHON_BACKEND_URL', 'http://localhost:8000')),
+    // The main backend URL (Worker service - handles workflows, agents, etc.)
+    // Default: port 3001 (Worker service)
+    // Port 8000 is Fast_API_Ollama (Ollama proxy only)
+    itemBackend: ensureProtocol(getEnvVar('VITE_PYTHON_BACKEND_URL', 'http://localhost:3001')),
 
     // Ollama URL (often proxies through the backend or is same as backend)
     ollamaBase: ensureProtocol(getEnvVar('VITE_OLLAMA_BASE_URL', getEnvVar('VITE_PYTHON_BACKEND_URL', 'http://localhost:11434'))),

@@ -1,6 +1,6 @@
 import { ENDPOINTS } from '@/config/endpoints';
 import { useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
     Bot, ArrowRight, AlertCircle,
     Settings2, CheckCircle2, Play, RefreshCw, Layers, Sparkles, Loader2, Check, Sun, Moon
@@ -37,7 +37,7 @@ interface AnalysisResult {
 
 interface RefinementResult {
     refinedPrompt: string;
-    requirements: Array<{
+    requirements?: Array<{
         key: string;
         label: string;
         type: string;
@@ -62,6 +62,15 @@ export function AutonomousAgentWizard() {
     const { setNodes, setEdges } = useWorkflowStore();
     const { theme, toggleTheme } = useTheme();
     const navigate = useNavigate();
+
+    // Debug: Log when workflow ID is set
+    useEffect(() => {
+        if (generatedWorkflowId) {
+            console.log('✅ Workflow ID set:', generatedWorkflowId);
+        } else {
+            console.log('⚠️ Workflow ID is null');
+        }
+    }, [generatedWorkflowId]);
 
     // Map backend phases to progress ranges
     const getProgressForPhase = (phase: string): number => {
@@ -96,7 +105,7 @@ export function AutonomousAgentWizard() {
         setStep('analyzing');
 
         try {
-            const response = await fetch(`${ENDPOINTS.itemBackend}/generate-workflow`, {
+            const response = await fetch(`${ENDPOINTS.itemBackend}/api/generate-workflow`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ prompt, mode: 'analyze' })
@@ -130,7 +139,7 @@ export function AutonomousAgentWizard() {
         })) || [];
 
         try {
-            const response = await fetch(`${ENDPOINTS.itemBackend}/generate-workflow`, {
+            const response = await fetch(`${ENDPOINTS.itemBackend}/api/generate-workflow`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ prompt, mode: 'refine', answers: fa })
@@ -188,7 +197,7 @@ export function AutonomousAgentWizard() {
             // Get Supabase URL and session token
             const { data: { session } } = await supabase.auth.getSession();
             // Use streaming mode to get real-time progress
-            const response = await fetch(`${ENDPOINTS.itemBackend}/generate-workflow`, {
+            const response = await fetch(`${ENDPOINTS.itemBackend}/api/generate-workflow`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -211,6 +220,7 @@ export function AutonomousAgentWizard() {
             const decoder = new TextDecoder();
             let buffer = '';
             let finalData: any = null;
+            let workflowSaved = false; // Track if workflow has been saved
 
             // Start fallback progress if streaming doesn't provide updates
             startFallbackProgress();
@@ -229,6 +239,19 @@ export function AutonomousAgentWizard() {
 
                         try {
                             const update = JSON.parse(line);
+                            console.log('Received update:', update);
+                            
+                            // Log structure for debugging
+                            if (update.success || update.workflow) {
+                                console.log('Completion detected - Structure:', {
+                                    hasDirectNodes: !!update.nodes,
+                                    hasDirectEdges: !!update.edges,
+                                    hasWorkflowNodes: !!update.workflow?.nodes,
+                                    hasWorkflowEdges: !!update.workflow?.edges,
+                                    success: update.success,
+                                    status: update.status
+                                });
+                            }
 
                             // Handle progress updates
                             if (update.current_phase) {
@@ -254,39 +277,78 @@ export function AutonomousAgentWizard() {
                                 });
                             }
 
-                            // Handle completion
-                            if (update.status === 'completed' || (update.nodes && update.edges)) {
+                            // Handle completion - check multiple possible completion indicators
+                            // Support both direct structure (update.nodes) and nested structure (update.workflow.nodes)
+                            const nodes = update.nodes || update.workflow?.nodes;
+                            const edges = update.edges || update.workflow?.edges;
+                            const hasNodes = nodes && Array.isArray(nodes) && nodes.length > 0;
+                            const hasEdges = edges && Array.isArray(edges);
+                            const isCompleted = update.status === 'completed' || update.status === 'success' || update.success === true || (hasNodes && hasEdges);
+                            
+                            if (isCompleted) {
                                 // Stop fallback progress
                                 stopFallbackProgress();
 
+                                // Store the full update, but extract nodes/edges for processing
                                 finalData = update;
+                                // Ensure nodes/edges are at top level for consistency
+                                if (update.workflow && !update.nodes) {
+                                    finalData.nodes = update.workflow.nodes;
+                                    finalData.edges = update.workflow.edges;
+                                }
+                                
                                 setProgress(100);
                                 setIsComplete(true);
                                 setBuildingLogs(prev => [...prev, 'Workflow Generated Successfully!']);
 
                                 // Normalize and save immediately
-                                const { data: { user } } = await supabase.auth.getUser();
-                                const normalized = validateAndFixWorkflow({ nodes: update.nodes, edges: update.edges });
+                                try {
+                                    const { data: { user } } = await supabase.auth.getUser();
+                                    const workflowNodes = nodes || [];
+                                    const workflowEdges = edges || [];
+                                    const normalized = validateAndFixWorkflow({ nodes: workflowNodes, edges: workflowEdges });
 
-                                const workflowData = {
-                                    name: analysis?.summary.substring(0, 50) || 'AI Generated Workflow',
-                                    nodes: normalized.nodes,
-                                    edges: normalized.edges,
-                                    user_id: user?.id,
-                                    updated_at: new Date().toISOString(),
-                                };
+                                    const workflowData = {
+                                        name: (analysis?.summary && typeof analysis.summary === 'string') 
+                                            ? analysis.summary.substring(0, 50) 
+                                            : 'AI Generated Workflow',
+                                        nodes: normalized.nodes,
+                                        edges: normalized.edges,
+                                        user_id: user?.id,
+                                        updated_at: new Date().toISOString(),
+                                    };
 
-                                const { data: savedWorkflow, error: saveError } = await supabase
-                                    .from('workflows')
-                                    .insert(workflowData)
-                                    .select()
-                                    .single();
+                                    const { data: savedWorkflow, error: saveError } = await supabase
+                                        .from('workflows')
+                                        .insert(workflowData)
+                                        .select()
+                                        .single();
 
-                                if (saveError) throw saveError;
+                                    if (saveError) {
+                                        console.error('Error saving workflow in streaming:', saveError);
+                                        throw saveError;
+                                    }
 
-                                setGeneratedWorkflowId(savedWorkflow.id);
-                                setNodes(normalized.nodes);
-                                setEdges(normalized.edges);
+                                    if (savedWorkflow?.id) {
+                                        setGeneratedWorkflowId(savedWorkflow.id);
+                                        setNodes(normalized.nodes);
+                                        setEdges(normalized.edges);
+                                        workflowSaved = true;
+                                        console.log('Workflow saved successfully with ID:', savedWorkflow.id);
+                                    } else {
+                                        console.error('Workflow saved but no ID returned');
+                                        throw new Error('Failed to get workflow ID after save');
+                                    }
+                                } catch (saveErr: any) {
+                                    console.error('Error saving workflow in streaming completion:', saveErr);
+                                    toast({
+                                        title: 'Warning',
+                                        description: 'Workflow generated but failed to save. Error: ' + (saveErr.message || 'Unknown error'),
+                                        variant: 'destructive',
+                                    });
+                                    // Don't return early if save failed - let it try again in the fallback section
+                                    // But still show completion
+                                }
 
                                 // Immediately show completion
                                 setStep('complete');
@@ -309,7 +371,7 @@ export function AutonomousAgentWizard() {
             // (Backend might send final workflow data without explicit completion status)
             if (!finalData) {
                 // Fallback: If streaming didn't work, use regular invoke
-                const response = await fetch(`${ENDPOINTS.itemBackend}/generate-workflow`, {
+                const response = await fetch(`${ENDPOINTS.itemBackend}/api/generate-workflow`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -335,30 +397,67 @@ export function AutonomousAgentWizard() {
                 setBuildingLogs(prev => [...prev, 'Workflow Generated Successfully!']);
             }
 
-            // Save workflow to database
-            if (finalData && finalData.nodes && finalData.edges) {
-                const { data: { user } } = await supabase.auth.getUser();
-                const normalized = validateAndFixWorkflow({ nodes: finalData.nodes, edges: finalData.edges });
+            // Save workflow to database (if not already saved in streaming completion)
+            // Support both direct structure (finalData.nodes) and nested structure (finalData.workflow.nodes)
+            const workflowNodes = finalData?.nodes || finalData?.workflow?.nodes;
+            const workflowEdges = finalData?.edges || finalData?.workflow?.edges;
+            
+            if (finalData && workflowNodes && workflowEdges && !workflowSaved) {
+                try {
+                    const { data: { user } } = await supabase.auth.getUser();
+                    const normalized = validateAndFixWorkflow({ nodes: workflowNodes, edges: workflowEdges });
 
-                const workflowData = {
-                    name: analysis?.summary.substring(0, 50) || 'AI Generated Workflow',
-                    nodes: normalized.nodes,
-                    edges: normalized.edges,
-                    user_id: user?.id,
-                    updated_at: new Date().toISOString(),
-                };
+                    const workflowData = {
+                        name: (analysis?.summary && typeof analysis.summary === 'string') 
+                            ? analysis.summary.substring(0, 50) 
+                            : 'AI Generated Workflow',
+                        nodes: normalized.nodes,
+                        edges: normalized.edges,
+                        user_id: user?.id,
+                        updated_at: new Date().toISOString(),
+                    };
 
-                const { data: savedWorkflow, error: saveError } = await supabase
-                    .from('workflows')
-                    .insert(workflowData)
-                    .select()
-                    .single();
+                    const { data: savedWorkflow, error: saveError } = await supabase
+                        .from('workflows')
+                        .insert(workflowData)
+                        .select()
+                        .single();
 
-                if (saveError) throw saveError;
+                    if (saveError) {
+                        console.error('Error saving workflow:', saveError);
+                        throw saveError;
+                    }
 
-                setGeneratedWorkflowId(savedWorkflow.id);
-                setNodes(normalized.nodes);
-                setEdges(normalized.edges);
+                    if (savedWorkflow?.id) {
+                        setGeneratedWorkflowId(savedWorkflow.id);
+                        setNodes(normalized.nodes);
+                        setEdges(normalized.edges);
+                        workflowSaved = true;
+                        console.log('Workflow saved successfully in fallback with ID:', savedWorkflow.id);
+                    } else {
+                        console.error('Workflow saved but no ID returned');
+                        throw new Error('Failed to get workflow ID after save');
+                    }
+                } catch (saveErr: any) {
+                    console.error('Error in workflow save:', saveErr);
+                    toast({
+                        title: 'Warning',
+                        description: 'Workflow generated but failed to save. Error: ' + (saveErr.message || 'Unknown error'),
+                        variant: 'destructive',
+                    });
+                }
+            } else if (!workflowSaved && !generatedWorkflowId) {
+                // If we have finalData but no nodes/edges, log it for debugging
+                console.warn('Workflow completed but missing nodes/edges:', finalData);
+                console.warn('Available keys:', Object.keys(finalData || {}));
+                if (finalData?.workflow) {
+                    console.warn('Workflow object keys:', Object.keys(finalData.workflow));
+                }
+                toast({
+                    title: 'Warning',
+                    description: 'Workflow generation completed but data structure is incomplete. Check console for details.',
+                    variant: 'destructive',
+                });
             }
 
             // Stop fallback progress and show completion when 100% is reached
@@ -571,7 +670,7 @@ export function AutonomousAgentWizard() {
                                         </CardContent>
                                     </Card>
 
-                                    {refinement.requirements.length > 0 && (
+                                    {refinement.requirements && refinement.requirements.length > 0 && (
                                         <Card className="border-amber-500/20 shadow-lg">
                                             <CardHeader>
                                                 <CardTitle className="text-amber-400 flex items-center gap-2">
@@ -590,7 +689,7 @@ export function AutonomousAgentWizard() {
                                                     </div>
                                                 </RadioGroup>
 
-                                                {requirementsMode === 'manual' && (
+                                                {requirementsMode === 'manual' && refinement.requirements && (
                                                     <div className="grid gap-4 animate-in fade-in slide-in-from-bottom-2">
                                                         {refinement.requirements.map(req => (
                                                             <div key={req.key} className="gap-2 grid">
@@ -709,7 +808,20 @@ export function AutonomousAgentWizard() {
                                     <RefreshCw className="mr-2 h-4 w-4" /> Create Another
                                 </Button>
                                 <Button
-                                    onClick={() => generatedWorkflowId && navigate(`/workflow/${generatedWorkflowId}`)}
+                                    onClick={() => {
+                                        if (generatedWorkflowId) {
+                                            console.log('Navigating to workflow:', generatedWorkflowId);
+                                            // Use replace to prevent back button issues and ensure clean navigation
+                                            navigate(`/workflow/${generatedWorkflowId}`, { replace: false });
+                                        } else {
+                                            console.error('Cannot navigate: generatedWorkflowId is null');
+                                            toast({
+                                                title: 'Error',
+                                                description: 'Workflow ID not available. Please try creating the workflow again.',
+                                                variant: 'destructive',
+                                            });
+                                        }
+                                    }}
                                     className="bg-primary text-primary-foreground hover:bg-primary/90 h-12 px-8 font-semibold shadow-xl shadow-primary/10 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                                     disabled={!generatedWorkflowId}
                                 >

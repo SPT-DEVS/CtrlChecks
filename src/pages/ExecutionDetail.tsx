@@ -78,7 +78,7 @@ export default function ExecutionDetail() {
       toast({ title: 'Retrying...', description: 'Starting execution' });
       
       const { data: sessionData } = await supabase.auth.getSession();
-      const response = await fetch(`${ENDPOINTS.itemBackend}/execute-workflow`, {
+      const response = await fetch(`${ENDPOINTS.itemBackend}/api/execute-workflow`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

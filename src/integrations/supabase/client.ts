@@ -5,24 +5,26 @@ import type { Database } from './types';
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
-// Check for missing environment variables
+// Check for missing environment variables (only warn, don't block)
 if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
-  console.error('Missing Supabase environment variables!');
-  console.error('VITE_SUPABASE_URL:', SUPABASE_URL ? '✓' : '✗ Missing');
-  console.error('VITE_SUPABASE_PUBLISHABLE_KEY:', SUPABASE_PUBLISHABLE_KEY ? '✓' : '✗ Missing');
-  console.error('Please create a .env file with these variables.');
-  console.error('See FIND_SUPABASE_KEYS.md for instructions.');
+  console.warn('⚠️ Missing Supabase environment variables!');
+  console.warn('VITE_SUPABASE_URL:', SUPABASE_URL ? '✓' : '✗ Missing');
+  console.warn('VITE_SUPABASE_PUBLISHABLE_KEY:', SUPABASE_PUBLISHABLE_KEY ? '✓' : '✗ Missing');
+  console.warn('Please create a .env file with these variables.');
+  console.warn('Copy .env.example to .env and fill in your Supabase credentials.');
+  console.warn('The app will continue to run but authentication features may not work.');
 }
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
+// Create client with fallback values to prevent crashes
 export const supabase = createClient<Database>(
   SUPABASE_URL || 'https://placeholder.supabase.co',
   SUPABASE_PUBLISHABLE_KEY || 'placeholder-key',
   {
     auth: {
-      storage: localStorage,
+      storage: typeof window !== 'undefined' ? localStorage : undefined,
       persistSession: true,
       autoRefreshToken: true,
     }

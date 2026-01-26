@@ -18,11 +18,11 @@ Write-Host ""
 # Check if backend is running
 Write-Host "Testing Backend Connection..." -ForegroundColor Yellow
 try {
-    $healthCheck = Invoke-WebRequest -Uri "http://localhost:8501/health" -Method GET -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop
-    Write-Host "✅ Backend is running on port 8501" -ForegroundColor Green
+    $healthCheck = Invoke-WebRequest -Uri "http://localhost:8000/health" -Method GET -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop
+    Write-Host "✅ Fast_API_Ollama is running on port 8000" -ForegroundColor Green
 } catch {
-    Write-Host "❌ Backend is NOT running on port 8501" -ForegroundColor Red
-    Write-Host "   Start it with: cd AI_Agent\multimodal_backend; python main.py" -ForegroundColor Yellow
+    Write-Host "❌ Fast_API_Ollama is NOT running on port 8000" -ForegroundColor Red
+    Write-Host "   Start it with: cd ..\Fast_API_Ollama && uvicorn main:app --host 0.0.0.0 --port 8000 --reload" -ForegroundColor Yellow
     exit 1
 }
 

@@ -26,6 +26,7 @@ export default function WorkflowBuilder() {
   const { user, loading: authLoading } = useAuth();
   const [isSaving, setIsSaving] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [consoleExpanded, setConsoleExpanded] = useState(false);
   const [nodeLibraryOpen, setNodeLibraryOpen] = useState(true);
   const [propertiesPanelOpen, setPropertiesPanelOpen] = useState(true);
@@ -49,7 +50,11 @@ export default function WorkflowBuilder() {
   }, [user, authLoading, navigate]);
 
   const loadWorkflow = useCallback(async (workflowId: string) => {
+    setIsLoading(true);
     try {
+      // CRITICAL: Reset state first to prevent stale data
+      resetWorkflow();
+      
       const { data, error } = await supabase
         .from('workflows')
         .select('*')
@@ -63,14 +68,21 @@ export default function WorkflowBuilder() {
         setWorkflowName(data.name);
 
         // Normalize nodes to ensure they have label, category, icon, etc.
+        // This will regenerate all IDs to ensure uniqueness
         const normalized = validateAndFixWorkflow({
           nodes: data.nodes || [],
           edges: data.edges || []
         });
 
+        // CRITICAL: Set nodes and edges atomically to prevent partial state
         setNodes(normalized.nodes);
         setEdges(normalized.edges);
         setIsDirty(false);
+        
+        toast({
+          title: 'Workflow loaded',
+          description: `Successfully loaded "${data.name}"`,
+        });
       }
     } catch (error) {
       console.error('Error loading workflow:', error);
@@ -79,13 +91,24 @@ export default function WorkflowBuilder() {
         description: 'Failed to load workflow',
         variant: 'destructive',
       });
+      // Reset on error to prevent corrupted state
+      resetWorkflow();
+    } finally {
+      setIsLoading(false);
     }
-  }, [setWorkflowId, setWorkflowName, setNodes, setEdges, setIsDirty]);
+  }, [setWorkflowId, setWorkflowName, setNodes, setEdges, setIsDirty, resetWorkflow]);
 
   // Load workflow if editing - only reset for new workflows
+  // CRITICAL: This effect must run whenever the route ID changes
   useEffect(() => {
-    if (id && id !== 'new' && user) {
-      loadWorkflow(id);
+    if (!user) return; // Wait for auth
+    
+    if (id && id !== 'new') {
+      // Check if we're already loading this workflow to prevent duplicate loads
+      const currentWorkflowId = useWorkflowStore.getState().workflowId;
+      if (currentWorkflowId !== id) {
+        loadWorkflow(id);
+      }
     } else if (id === 'new') {
       resetWorkflow();
     }
@@ -152,19 +175,24 @@ export default function WorkflowBuilder() {
         throw new Error('Invalid workflow format: missing nodes or edges');
       }
 
+      // CRITICAL: Reset state first to prevent stale data
+      resetWorkflow();
+
       // Set workflow name
       if (workflowData.name) {
         setWorkflowName(workflowData.name);
       }
 
-      // Convert and set nodes
-      const importedNodes = (workflowData.nodes || []) as WorkflowNode[];
-      setNodes(importedNodes);
+      // CRITICAL: Normalize and regenerate IDs to ensure uniqueness
+      // This prevents duplicate ID collisions when importing workflows
+      const normalized = validateAndFixWorkflow({
+        nodes: workflowData.nodes || [],
+        edges: workflowData.edges || []
+      });
 
-      // Convert and set edges
-      const importedEdges = (workflowData.edges || []) as Edge[];
-      setEdges(importedEdges);
-
+      // Set nodes and edges atomically
+      setNodes(normalized.nodes);
+      setEdges(normalized.edges);
       setIsDirty(true);
 
       toast({
@@ -178,10 +206,12 @@ export default function WorkflowBuilder() {
         description: `Failed to import workflow: ${error instanceof Error ? error.message : 'Unknown error'}`,
         variant: 'destructive',
       });
+      // Reset on error to prevent corrupted state
+      resetWorkflow();
     }
-  }, [setWorkflowName, setNodes, setEdges, setIsDirty]);
+  }, [setWorkflowName, setNodes, setEdges, setIsDirty, resetWorkflow]);
 
-  const handleRun = useCallback(async () => {
+  const handleRun = useCallback(async (autoSave = false) => {
     const workflowId = useWorkflowStore.getState().workflowId;
 
     if (nodes.length === 0) {
@@ -193,7 +223,62 @@ export default function WorkflowBuilder() {
       return;
     }
 
-    if (!workflowId) {
+    // Auto-save if needed and requested
+    if (autoSave && (!workflowId || useWorkflowStore.getState().isDirty)) {
+      if (!user) return;
+      
+      try {
+        setIsSaving(true);
+        const workflowData = {
+          name: useWorkflowStore.getState().workflowName,
+          nodes: nodes as unknown as Json,
+          edges: edges as unknown as Json,
+          user_id: user.id,
+          updated_at: new Date().toISOString(),
+        };
+
+        let savedWorkflowId = workflowId;
+
+        if (savedWorkflowId) {
+          const { error } = await supabase
+            .from('workflows')
+            .update(workflowData)
+            .eq('id', savedWorkflowId);
+
+          if (error) throw error;
+        } else {
+          const { data, error } = await supabase
+            .from('workflows')
+            .insert(workflowData)
+            .select()
+            .single();
+
+          if (error) throw error;
+
+          if (data) {
+            savedWorkflowId = data.id;
+            setWorkflowId(data.id);
+            navigate(`/workflow/${data.id}`, { replace: true });
+          }
+        }
+
+        setIsDirty(false);
+      } catch (error) {
+        console.error('Error auto-saving workflow:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to save workflow before running',
+          variant: 'destructive',
+        });
+        setIsSaving(false);
+        return;
+      } finally {
+        setIsSaving(false);
+      }
+    }
+
+    const finalWorkflowId = useWorkflowStore.getState().workflowId;
+    if (!finalWorkflowId) {
       toast({
         title: 'Save required',
         description: 'Please save your workflow before running',
@@ -204,7 +289,7 @@ export default function WorkflowBuilder() {
 
     // CRITICAL: Prevent manual execution when schedule is active
     const { workflowScheduler } = await import('@/lib/workflowScheduler');
-    if (workflowScheduler.isScheduled(workflowId)) {
+    if (workflowScheduler.isScheduled(finalWorkflowId)) {
       toast({
         title: 'Schedule is active',
         description: 'Manual Run is disabled when a schedule is active. The workflow is running automatically.',
@@ -223,7 +308,7 @@ export default function WorkflowBuilder() {
         const { data: workflowData, error: workflowError } = await supabase
           .from('workflows')
           .select('status')
-          .eq('id', workflowId)
+          .eq('id', finalWorkflowId)
           .single();
 
         if (workflowError) {
@@ -247,8 +332,8 @@ export default function WorkflowBuilder() {
         }
 
         const isActive = workflowData.status === 'active';
-        console.log('Workflow status check:', { workflowId, status: workflowData.status, isActive });
-        const formUrl = `${window.location.origin}/form/${workflowId}/${formNode.id}`;
+        console.log('Workflow status check:', { workflowId: finalWorkflowId, status: workflowData.status, isActive });
+        const formUrl = `${window.location.origin}/form/${finalWorkflowId}/${formNode.id}`;
 
         if (!isActive) {
           // Workflow is not active - show activation message
@@ -283,7 +368,7 @@ export default function WorkflowBuilder() {
           setIsRunning(true);
           try {
             const { data: sessionData } = await supabase.auth.getSession();
-            const response = await fetch(`${ENDPOINTS.itemBackend}/execute-workflow`, {
+            const response = await fetch(`${ENDPOINTS.itemBackend}/api/execute-workflow`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -292,7 +377,7 @@ export default function WorkflowBuilder() {
                   : {}),
               },
               body: JSON.stringify({
-                workflowId,
+                workflowId: finalWorkflowId,
                 input: {},
               }),
             });
@@ -347,7 +432,7 @@ export default function WorkflowBuilder() {
 
     try {
       const { data: sessionData } = await supabase.auth.getSession();
-      const response = await fetch(`${ENDPOINTS.itemBackend}/execute-workflow`, {
+      const response = await fetch(`${ENDPOINTS.itemBackend}/api/execute-workflow`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -356,7 +441,7 @@ export default function WorkflowBuilder() {
             : {}),
         },
         body: JSON.stringify({
-          workflowId,
+          workflowId: finalWorkflowId,
           input: {
             ...testInput,
             _trigger: 'manual',
@@ -399,10 +484,13 @@ export default function WorkflowBuilder() {
     event.dataTransfer.effectAllowed = 'move';
   }, []);
 
-  if (authLoading) {
+  if (authLoading || isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+        <div className="flex flex-col items-center gap-4">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+          <p className="text-muted-foreground">Loading workflow...</p>
+        </div>
       </div>
     );
   }
@@ -444,7 +532,7 @@ export default function WorkflowBuilder() {
           )}
 
           {/* Central Canvas Area */}
-          <div className="flex-1 relative">
+          <div className="flex-1 relative w-full h-full" style={{ minWidth: 0, minHeight: 0 }}>
             <WorkflowCanvas />
           </div>
 

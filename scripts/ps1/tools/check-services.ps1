@@ -5,8 +5,8 @@ Write-Host "🔍 Checking Service Status..." -ForegroundColor Cyan
 Write-Host ""
 
 $services = @(
-    @{Name="Ollama Backend"; Port=8000; Endpoint="/health"},
-    @{Name="Python Multimodal Backend"; Port=8501; Endpoint="/health"},
+    @{Name="Fast_API_Ollama"; Port=8000; Endpoint="/health"},
+    @{Name="Worker"; Port=8001; Endpoint="/health"},
     @{Name="Frontend"; Port=5173; Endpoint="/"}
 )
 
@@ -26,10 +26,10 @@ foreach ($service in $services) {
         $allRunning = $false
         
         # Provide helpful instructions
-        if ($service.Name -eq "Python Multimodal Backend") {
-            Write-Host "      💡 To start: cd AI_Agent\multimodal_backend; python main.py" -ForegroundColor Yellow
-        } elseif ($service.Name -eq "Ollama Backend") {
-            Write-Host "      💡 To start: cd AI_Agent\ollama_backend; .\venv\Scripts\Activate.ps1; uvicorn src.api.endpoints:app --host 0.0.0.0 --port 8000 --reload" -ForegroundColor Yellow
+        if ($service.Name -eq "Fast_API_Ollama") {
+            Write-Host "      💡 To start: cd ..\Fast_API_Ollama && uvicorn main:app --host 0.0.0.0 --port 8000 --reload" -ForegroundColor Yellow
+        } elseif ($service.Name -eq "Worker") {
+            Write-Host "      💡 To start: cd ..\worker && uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload" -ForegroundColor Yellow
         } elseif ($service.Name -eq "Frontend") {
             Write-Host "      💡 To start: npm run dev" -ForegroundColor Yellow
         }
@@ -37,18 +37,18 @@ foreach ($service in $services) {
     Write-Host ""
 }
 
-# Check Python backend specific endpoint
-Write-Host "Testing Python Backend /api/agent/execute endpoint..." -ForegroundColor Yellow
+# Check Worker specific endpoint
+Write-Host "Testing Worker /execute-multimodal-agent endpoint..." -ForegroundColor Yellow
 try {
     $testPayload = @{
         task = "summarize"
         input = "Test input"
     } | ConvertTo-Json
     
-    $response = Invoke-WebRequest -Uri "http://localhost:8501/api/agent/execute" -Method POST -Body $testPayload -ContentType "application/json" -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
-    Write-Host "   ✅ /api/agent/execute endpoint is working" -ForegroundColor Green
+    $response = Invoke-WebRequest -Uri "http://localhost:8001/execute-multimodal-agent" -Method POST -Body $testPayload -ContentType "application/json" -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
+    Write-Host "   ✅ /execute-multimodal-agent endpoint is working" -ForegroundColor Green
 } catch {
-    Write-Host "   ❌ /api/agent/execute endpoint failed" -ForegroundColor Red
+    Write-Host "   ❌ /execute-multimodal-agent endpoint failed" -ForegroundColor Red
     Write-Host "      Error: $($_.Exception.Message)" -ForegroundColor Red
     $allRunning = $false
 }

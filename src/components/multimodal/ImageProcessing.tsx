@@ -19,8 +19,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { ENDPOINTS } from '@/config/endpoints';
 import { toast } from '@/hooks/use-toast';
 
-import { ENDPOINTS } from '@/config/endpoints';
-
 const PYTHON_BACKEND_URL = ENDPOINTS.itemBackend;
 const USE_DIRECT_BACKEND = ENDPOINTS.useDirectBackend;
 
@@ -37,7 +35,7 @@ interface ImageProcessingProps {
   selectedTools?: string[]; // Filter which tools to show (task names: image_caption, story, image_prompt, text_to_image)
 }
 
-export default function ImageProcessing({ selectedTools }: ImageProcessingProps = {}) {
+export default function ImageProcessing({ selectedTools = [] }: ImageProcessingProps) {
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [sentenceCount, setSentenceCount] = useState(5);
@@ -210,7 +208,7 @@ export default function ImageProcessing({ selectedTools }: ImageProcessingProps 
           if (fetchError.message?.includes('Failed to fetch') || fetchError.message?.includes('ERR_CONNECTION_REFUSED')) {
             errorMessage = `Cannot connect to Python backend at ${PYTHON_BACKEND_URL}. ` +
               `Please ensure the backend is running. ` +
-              `Start it with: cd AI_Agent\\multimodal_backend && python main.py`;
+              `Start it with: cd Fast_API_Ollama && uvicorn main:app --host 0.0.0.0 --port 8000 --reload`;
           }
 
           error = { message: errorMessage };
@@ -234,7 +232,9 @@ export default function ImageProcessing({ selectedTools }: ImageProcessingProps 
         }
 
         data = await response.json();
-        error = result.error;
+        if (data.error) {
+          error = { message: data.error };
+        }
       }
 
       setProgress(90);

@@ -119,14 +119,47 @@ export default function DebugPanel({ onClose }: DebugPanelProps) {
   }, [toast, setPendingExpression]);
 
   const handleRunNode = useCallback(async () => {
-    if (!debugNodeId || !debugNode || !workflowId) return;
+    if (!debugNodeId || !workflowId) return;
+
+    // Get the latest node from the store (not from memoized debugNode)
+    // This ensures we have the latest config with updated expressions
+    const latestNode = nodes.find((n) => n.id === debugNodeId);
+    if (!latestNode) {
+      toast({
+        title: 'Error',
+        description: 'Node not found',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     setIsRunning(true);
     setNodeStatus(debugNodeId, 'running');
 
     try {
-      // Prepare node config with resolved expressions
-      const nodeConfig = { ...debugNode.data.config };
+      // Get the latest node config from the store (includes any dragged expressions)
+      const nodeConfig = { ...latestNode.data.config };
+      
+      // Get the latest input data (reactive to changes)
+      const currentInputData = (() => {
+        // First, try to get from previous node's output
+        const prevOutput = getPreviousNodeOutput(debugNodeId, nodes, edges);
+        if (prevOutput && prevOutput !== null) return prevOutput;
+        
+        // Second, try to get from stored lastInput
+        const currentState = getNodeState(debugNodeId);
+        if (currentState?.lastInput) return currentState.lastInput;
+        
+        // For trigger nodes (no incoming edges), provide sample input
+        const incomingEdges = edges.filter(e => e.target === debugNodeId);
+        if (incomingEdges.length === 0) {
+          if (latestNode.data.type === 'manual_trigger' || latestNode.data.type === 'webhook') {
+            return { data: { example: 'value' }, message: 'Sample input' };
+          }
+        }
+        
+        return {};
+      })();
       
       // Generate runId (UUID v4) for this debug execution
       const runId = crypto.randomUUID();
@@ -144,9 +177,9 @@ export default function DebugPanel({ onClose }: DebugPanelProps) {
         body: JSON.stringify({
           runId,
           nodeId: debugNodeId,
-          nodeType: debugNode.data.type,
+          nodeType: latestNode.data.type,
           config: nodeConfig,
-          input: inputData,
+          input: currentInputData,
           workflowId,
         }),
       });
@@ -184,7 +217,7 @@ export default function DebugPanel({ onClose }: DebugPanelProps) {
     } finally {
       setIsRunning(false);
     }
-  }, [debugNodeId, debugNode, workflowId, inputData, setNodeOutput, setNodeStatus, toast]);
+  }, [debugNodeId, workflowId, nodes, edges, getPreviousNodeOutput, getNodeState, setNodeOutput, setNodeStatus, toast]);
 
   if (!debugNodeId || !debugNode) {
     return null;

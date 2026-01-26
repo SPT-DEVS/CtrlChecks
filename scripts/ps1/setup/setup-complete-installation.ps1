@@ -29,10 +29,10 @@ try {
     exit 1
 }
 
-# Step 3: Navigate to multimodal backend
+# Step 3: Navigate to Fast_API_Ollama
 Write-Host ""
-Write-Host "3️⃣  Setting up multimodal backend..." -ForegroundColor Yellow
-$backendPath = "AI_Agent\multimodal_backend"
+Write-Host "3️⃣  Setting up Fast_API_Ollama..." -ForegroundColor Yellow
+$backendPath = "..\Fast_API_Ollama"
 if (-not (Test-Path $backendPath)) {
     Write-Host "   ❌ Backend directory not found: $backendPath" -ForegroundColor Red
     exit 1
@@ -180,13 +180,12 @@ Write-Host ""
 if ($allInstalled) {
     Write-Host "📋 Next Steps:" -ForegroundColor Cyan
     Write-Host ""
-    Write-Host "1. Start the multimodal backend:" -ForegroundColor White
-    Write-Host "   cd AI_Agent\multimodal_backend" -ForegroundColor Gray
-    Write-Host "   .\venv\Scripts\Activate.ps1" -ForegroundColor Gray
-    Write-Host "   python main.py" -ForegroundColor Gray
+    Write-Host "1. Start the services:" -ForegroundColor White
+    Write-Host "   .\scripts\ps1\start\start-all-services.ps1" -ForegroundColor Gray
     Write-Host ""
-    Write-Host "2. Or use the convenience script:" -ForegroundColor White
-    Write-Host "   .\start-all-services.ps1" -ForegroundColor Gray
+    Write-Host "2. Or start manually:" -ForegroundColor White
+    Write-Host "   Fast_API_Ollama: cd ..\Fast_API_Ollama && uvicorn main:app --host 0.0.0.0 --port 8000 --reload" -ForegroundColor Gray
+    Write-Host "   Worker: cd ..\worker && uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload" -ForegroundColor Gray
     Write-Host ""
     Write-Host "3. Verify models are available:" -ForegroundColor White
     Write-Host "   ollama list" -ForegroundColor Gray
@@ -194,9 +193,8 @@ if ($allInstalled) {
 } else {
     Write-Host "⚠️  Some packages failed to install. Please check the errors above." -ForegroundColor Yellow
     Write-Host "   You may need to install them manually:" -ForegroundColor Yellow
-    Write-Host "   cd AI_Agent\multimodal_backend" -ForegroundColor Gray
-    Write-Host "   .\venv\Scripts\Activate.ps1" -ForegroundColor Gray
-    Write-Host "   pip install -r requirements.txt" -ForegroundColor Gray
+    Write-Host "   Fast_API_Ollama: cd ..\Fast_API_Ollama && pip install -r requirements.txt" -ForegroundColor Gray
+    Write-Host "   Worker: cd ..\worker && pip install -r requirements.txt" -ForegroundColor Gray
 }
 
 Write-Host "✅ Setup script complete!" -ForegroundColor Green

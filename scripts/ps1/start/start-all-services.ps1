@@ -8,8 +8,8 @@ Write-Host ""
 Write-Host "🔍 Checking existing services..." -ForegroundColor Yellow
 
 $services = @(
-    @{Name="Ollama Backend"; Port=8000; Path="AI_Agent\ollama_backend"; Command=".\venv\Scripts\Activate.ps1; uvicorn src.api.endpoints:app --host 0.0.0.0 --port 8000 --reload"},
-    @{Name="Python Backend"; Port=8501; Path="AI_Agent\multimodal_backend"; Command="python main.py"},
+    @{Name="Fast_API_Ollama"; Port=8000; Path="..\Fast_API_Ollama"; Command=".\venv\Scripts\Activate.ps1; uvicorn main:app --host 0.0.0.0 --port 8000 --reload"},
+    @{Name="Worker"; Port=8001; Path="..\worker"; Command=".\venv\Scripts\Activate.ps1; uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload"},
     @{Name="Frontend"; Port=5173; Path="."; Command="npm run dev"}
 )
 
@@ -24,23 +24,15 @@ foreach ($service in $services) {
 
 Write-Host "`n📦 Starting services in separate windows..." -ForegroundColor Cyan
 
-# Start Ollama Backend
-Write-Host "`n1️⃣  Starting Ollama Backend..." -ForegroundColor Yellow
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$PWD\AI_Agent\ollama_backend'; .\venv\Scripts\Activate.ps1; Write-Host '🚀 Ollama Backend Starting...' -ForegroundColor Green; uvicorn src.api.endpoints:app --host 0.0.0.0 --port 8000 --reload" -WindowStyle Normal
+# Start Fast_API_Ollama
+Write-Host "`n1️⃣  Starting Fast_API_Ollama..." -ForegroundColor Yellow
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$PWD\..\Fast_API_Ollama'; if (Test-Path 'venv\Scripts\Activate.ps1') { .\venv\Scripts\Activate.ps1 }; Write-Host '🚀 Fast_API_Ollama Starting...' -ForegroundColor Green; uvicorn main:app --host 0.0.0.0 --port 8000 --reload" -WindowStyle Normal
 
 Start-Sleep -Seconds 2
 
-# Start Python Backend
-Write-Host "2️⃣  Starting Python Backend..." -ForegroundColor Yellow
-# Set OLLAMA_BASE_URL if not already set
-$ollamaUrl = $env:OLLAMA_BASE_URL
-if (-not $ollamaUrl) {
-    $ollamaUrl = "https://diego-ski-deutsche-choir.trycloudflare.com"
-    Write-Host "   ℹ️  Using default OLLAMA_BASE_URL: $ollamaUrl" -ForegroundColor Cyan
-} else {
-    Write-Host "   ℹ️  Using OLLAMA_BASE_URL from environment: $ollamaUrl" -ForegroundColor Cyan
-}
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$PWD\AI_Agent\multimodal_backend'; `$env:OLLAMA_BASE_URL='$ollamaUrl'; Write-Host '🚀 Python Backend Starting...' -ForegroundColor Green; Write-Host 'OLLAMA_BASE_URL: $ollamaUrl' -ForegroundColor Cyan; python main.py" -WindowStyle Normal
+# Start Worker
+Write-Host "2️⃣  Starting Worker..." -ForegroundColor Yellow
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$PWD\..\worker'; if (Test-Path 'venv\Scripts\Activate.ps1') { .\venv\Scripts\Activate.ps1 }; Write-Host '🚀 Worker Starting...' -ForegroundColor Green; uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload" -WindowStyle Normal
 
 Start-Sleep -Seconds 2
 
@@ -51,7 +43,7 @@ Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$PWD'; Write-
 Write-Host "`n✅ All services starting in separate windows!" -ForegroundColor Green
 Write-Host "`n⏳ Wait 10-15 seconds for services to start..." -ForegroundColor Yellow
 Write-Host "`n📝 Services:" -ForegroundColor Cyan
-Write-Host "   - Ollama Backend: http://localhost:8000" -ForegroundColor White
-Write-Host "   - Python Backend: http://localhost:8501" -ForegroundColor White
+Write-Host "   - Fast_API_Ollama: http://localhost:8000" -ForegroundColor White
+Write-Host "   - Worker: http://localhost:8001" -ForegroundColor White
 Write-Host "   - Frontend: http://localhost:5173" -ForegroundColor White
 Write-Host "`n🧪 Test integration: .\test-ollama-integration.ps1" -ForegroundColor Yellow

@@ -20,8 +20,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { ENDPOINTS } from '@/config/endpoints';
 import { toast } from '@/hooks/use-toast';
 
-import { ENDPOINTS } from '@/config/endpoints';
-
 const PYTHON_BACKEND_URL = ENDPOINTS.itemBackend;
 const USE_DIRECT_BACKEND = ENDPOINTS.useDirectBackend;
 
@@ -113,6 +111,7 @@ export default function AudioProcessing({ selectedTools }: AudioProcessingProps 
                 try {
                     const apiUrl = `${PYTHON_BACKEND_URL}/process`;
                     console.log('[AudioProcessing] Calling backend:', apiUrl);
+                    console.log('[AudioProcessing] Payload:', { ...payload, audio: payload.audio ? `[base64 audio ${payload.audio.length} chars]` : undefined });
 
                     const response = await fetch(apiUrl, {
                         method: 'POST',
@@ -120,23 +119,44 @@ export default function AudioProcessing({ selectedTools }: AudioProcessingProps 
                         body: JSON.stringify(payload)
                     });
 
+                    console.log('[AudioProcessing] Response status:', response.status, response.statusText);
+                    console.log('[AudioProcessing] Response headers:', Object.fromEntries(response.headers.entries()));
+
                     if (!response.ok) {
                         const txt = await response.text();
+                        console.error('[AudioProcessing] Error response:', txt);
                         throw new Error(txt || response.statusText);
                     }
-                    data = await response.json();
+                    
+                    const responseText = await response.text();
+                    console.log('[AudioProcessing] Response text length:', responseText.length);
+                    console.log('[AudioProcessing] Response preview:', responseText.substring(0, 200));
+                    
+                    try {
+                        data = JSON.parse(responseText);
+                        console.log('[AudioProcessing] Parsed response data:', { success: data.success, hasOutput: !!data.output, error: data.error });
+                    } catch (parseError) {
+                        console.error('[AudioProcessing] Failed to parse JSON:', parseError);
+                        console.error('[AudioProcessing] Raw response:', responseText);
+                        throw new Error(`Invalid JSON response: ${parseError}`);
+                    }
                 } catch (err: any) {
                     let errorMessage = err.message || 'Failed to connect to backend';
                     if (err.message?.includes('Failed to fetch') || err.message?.includes('ERR_CONNECTION_REFUSED')) {
                         errorMessage = `Cannot connect to Python backend at ${PYTHON_BACKEND_URL}. ` +
                             `Please ensure the backend is running. ` +
-                            `Start it with: cd AI_Agent\\multimodal_backend && python main.py`;
+                            `Start it with: cd Fast_API_Ollama && uvicorn main:app --host 0.0.0.0 --port 8000 --reload`;
                     }
                     throw new Error(errorMessage);
                 }
             } else {
                 const { data: sessionData } = await supabase.auth.getSession();
-                const response = await fetch(`${ENDPOINTS.itemBackend}/execute-multimodal-agent`, {
+                const apiUrl = `${ENDPOINTS.itemBackend}/execute-multimodal-agent`;
+                console.log('[AudioProcessing] Calling Supabase backend:', apiUrl);
+                console.log('[AudioProcessing] Payload:', { ...payload, audio: payload.audio ? `[base64 audio ${payload.audio.length} chars]` : undefined });
+                console.log('[AudioProcessing] Has auth token:', !!sessionData?.session?.access_token);
+
+                const response = await fetch(apiUrl, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -146,14 +166,43 @@ export default function AudioProcessing({ selectedTools }: AudioProcessingProps 
                     },
                     body: JSON.stringify(payload),
                 });
+
+                console.log('[AudioProcessing] Response status:', response.status, response.statusText);
+                console.log('[AudioProcessing] Response headers:', Object.fromEntries(response.headers.entries()));
+
                 if (!response.ok) {
-                    const error = await response.json().catch(() => ({ error: 'Request failed' }));
+                    const responseText = await response.text();
+                    console.error('[AudioProcessing] Error response text:', responseText);
+                    let error;
+                    try {
+                        error = JSON.parse(responseText);
+                    } catch {
+                        error = { error: responseText || 'Request failed' };
+                    }
+                    console.error('[AudioProcessing] Error object:', error);
                     throw new Error(error.error || error.message || 'Request failed');
                 }
-                data = await response.json();
+                
+                const responseText = await response.text();
+                console.log('[AudioProcessing] Response text length:', responseText.length);
+                console.log('[AudioProcessing] Response preview:', responseText.substring(0, 200));
+                
+                try {
+                    data = JSON.parse(responseText);
+                    console.log('[AudioProcessing] Parsed response data:', { success: data.success, hasOutput: !!data.output, error: data.error });
+                } catch (parseError) {
+                    console.error('[AudioProcessing] Failed to parse JSON:', parseError);
+                    console.error('[AudioProcessing] Raw response:', responseText);
+                    throw new Error(`Invalid JSON response: ${parseError}`);
+                }
             }
 
-            if (!data.success) throw new Error(data.error);
+            console.log('[AudioProcessing] Final data check:', { success: data.success, hasOutput: !!data.output, outputType: typeof data.output, error: data.error });
+            
+            if (!data.success) {
+                console.error('[AudioProcessing] Processing failed:', data.error);
+                throw new Error(data.error || 'Processing failed');
+            }
 
             setProgress(90);
 
@@ -164,10 +213,17 @@ export default function AudioProcessing({ selectedTools }: AudioProcessingProps 
                 duration: Date.now() - startTime
             }, ...prev]);
 
+            console.log('[AudioProcessing] ✅ Success! Output length:', data.output?.length || 0);
             toast({ title: "Success", description: "Audio processed successfully" });
 
         } catch (e: any) {
-            console.error(e);
+            console.error('[AudioProcessing] ❌ Error caught:', e);
+            console.error('[AudioProcessing] Error details:', {
+                message: e.message,
+                name: e.name,
+                stack: e.stack,
+                cause: e.cause
+            });
             setResults(prev => [{
                 mode,
                 success: false,

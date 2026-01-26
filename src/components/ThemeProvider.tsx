@@ -1,11 +1,11 @@
-import { useEffect } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { useTheme } from '@/hooks/useTheme';
 
 /**
  * ThemeProvider - Initializes theme on app load
  * This ensures theme is applied immediately when the app starts
  */
-export function ThemeProvider({ children }: { children: React.ReactNode }) {
+export function ThemeProvider({ children }: { children: ReactNode }) {
   const { theme } = useTheme();
 
   // Theme is already initialized by useTheme hook

@@ -19,6 +19,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/hooks/use-toast';
 import { Tables, Json } from '@/integrations/supabase/types';
+import { is406Error } from '@/lib/utils';
 
 type Workflow = Tables<'workflows'> & {
   last_execution?: { started_at: string; status: string } | null;
@@ -80,25 +81,55 @@ export default function Workflows() {
       // Load last execution for each workflow
       const workflowsWithStats = await Promise.all(
         (workflowsData || []).map(async (workflow) => {
-          // Get last execution
-          const { data: lastExec } = await supabase
-            .from('executions')
-            .select('started_at, status')
-            .eq('workflow_id', workflow.id)
-            .order('started_at', { ascending: false })
-            .limit(1)
-            .single();
+          // Get last execution - use maybeSingle() to handle workflows with no executions
+          let lastExec = null;
+          try {
+            const { data, error: execError } = await supabase
+              .from('executions')
+              .select('started_at, status')
+              .eq('workflow_id', workflow.id)
+              .order('started_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
 
-          // Get execution count
-          const { count } = await supabase
-            .from('executions')
-            .select('*', { count: 'exact', head: true })
-            .eq('workflow_id', workflow.id);
+            if (execError && !is406Error(execError)) {
+              // Only log non-406 errors (406 is expected when no executions exist)
+              console.warn(`Error loading execution for workflow ${workflow.id}:`, execError);
+            } else {
+              lastExec = data || null;
+            }
+          } catch (execErr: any) {
+            // Handle unexpected errors
+            if (!is406Error(execErr)) {
+              console.warn(`Unexpected error loading execution for workflow ${workflow.id}:`, execErr);
+            }
+          }
+
+          // Get execution count - handle 406 errors gracefully
+          let executionCount = 0;
+          try {
+            const { count, error: countError } = await supabase
+              .from('executions')
+              .select('*', { count: 'exact', head: true })
+              .eq('workflow_id', workflow.id);
+
+            if (countError && !is406Error(countError)) {
+              // Only log non-406 errors
+              console.warn(`Error loading execution count for workflow ${workflow.id}:`, countError);
+            } else {
+              executionCount = count || 0;
+            }
+          } catch (countErr: any) {
+            // Handle unexpected errors
+            if (!is406Error(countErr)) {
+              console.warn(`Unexpected error loading execution count for workflow ${workflow.id}:`, countErr);
+            }
+          }
 
           return {
             ...workflow,
-            last_execution: lastExec || null,
-            execution_count: count || 0,
+            last_execution: lastExec,
+            execution_count: executionCount,
             workflow_type: detectWorkflowType(workflow.nodes),
           };
         })

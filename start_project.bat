@@ -28,26 +28,23 @@ start cmd /k "npm run dev"
 goto MENU
 
 :START_BACKEND
-echo Starting Backend...
-cd AI_Agent\multimodal_backend
+echo Starting Fast_API_Ollama Backend...
+cd ..\Fast_API_Ollama
 
 :: Check if venv exists (basic check)
-if exist "..\..\.venv\Scripts\activate.bat" (
-    call "..\..\.venv\Scripts\activate.bat"
+if exist "venv\Scripts\activate.bat" (
+    call "venv\Scripts\activate.bat"
 ) else (
-    echo Warning: Virtual environment not found at ..\..\.venv. 
+    echo Warning: Virtual environment not found at venv. 
     echo Attempting to run with globally available python or continuing...
 )
 
-:: Install dependencies if needed (optional, can be slow)
-:: pip install -r requirements.txt
-
-python main.py
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 goto MENU
 
 :START_BOTH
-echo Starting Backend in new window...
-start "FlowGenius Backend" cmd /k "cd AI_Agent\multimodal_backend && if exist ..\..\.venv\Scripts\activate.bat call ..\..\.venv\Scripts\activate.bat && python main.py"
+echo Starting Fast_API_Ollama Backend in new window...
+start "Fast_API_Ollama Backend" cmd /k "cd ..\Fast_API_Ollama && if exist venv\Scripts\activate.bat call venv\Scripts\activate.bat && uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
 
 echo Starting Frontend in new window...
 start "FlowGenius Frontend" cmd /k "npm run dev"

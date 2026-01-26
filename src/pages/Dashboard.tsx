@@ -138,23 +138,41 @@ export default function Dashboard() {
                 .limit(1)
                 .maybeSingle();
 
-              // Handle 406 errors gracefully - expected when workflow has no executions
-              // PostgREST returns 406 instead of 200 [] when RLS blocks empty result sets
+              // Handle errors gracefully
               if (execError) {
                 if (is406Error(execError)) {
                   // 406 = No executions exist for this workflow (expected)
                   lastExec = null;
+                } else if (execError.code === 'PGRST301' || execError.message?.includes('permission denied') || execError.message?.includes('row-level security')) {
+                  // Permission/RLS error - log for debugging but don't break the UI
+                  console.warn(`Permission error loading execution for workflow ${workflow.id}:`, execError.message);
+                  lastExec = null;
                 } else {
-                  // Real error - log it
-                  console.warn(`Error loading execution for workflow ${workflow.id}:`, execError);
+                  // Other errors - log for debugging
+                  console.warn(`Error loading execution for workflow ${workflow.id}:`, {
+                    code: execError.code,
+                    message: execError.message,
+                    details: execError.details,
+                    hint: execError.hint
+                  });
+                  lastExec = null;
                 }
               } else {
                 lastExec = data || null;
               }
             } catch (execErr: any) {
-              // Suppress 406 errors in catch block as well
-              if (!is406Error(execErr)) {
-                console.warn(`Error loading execution for workflow ${workflow.id}:`, execErr);
+              // Handle unexpected errors
+              if (is406Error(execErr)) {
+                // 406 is expected - suppress
+                lastExec = null;
+              } else {
+                // Log other errors for debugging
+                console.warn(`Unexpected error loading execution for workflow ${workflow.id}:`, {
+                  message: execErr?.message,
+                  code: execErr?.code,
+                  stack: execErr?.stack
+                });
+                lastExec = null;
               }
             }
 
@@ -167,14 +185,23 @@ export default function Dashboard() {
                 .select('*', { count: 'exact', head: true })
                 .eq('workflow_id', workflow.id);
 
-              // Handle 406 errors - expected when no executions exist
+              // Handle errors gracefully
               if (countError) {
                 if (is406Error(countError)) {
                   // 406 = No executions exist (expected) - treat as 0
                   count = 0;
+                } else if (countError.code === 'PGRST301' || countError.message?.includes('permission denied') || countError.message?.includes('row-level security')) {
+                  // Permission/RLS error - log for debugging but don't break the UI
+                  console.warn(`Permission error counting executions for workflow ${workflow.id}:`, countError.message);
+                  count = 0;
                 } else {
-                  // Real error - log it
-                  console.warn(`Error counting executions for workflow ${workflow.id}:`, countError);
+                  // Other errors - log for debugging
+                  console.warn(`Error counting executions for workflow ${workflow.id}:`, {
+                    code: countError.code,
+                    message: countError.message,
+                    details: countError.details,
+                    hint: countError.hint
+                  });
                   count = 0;
                 }
               } else {

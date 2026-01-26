@@ -4,10 +4,11 @@
 -- Enable RLS on user_roles table
 ALTER TABLE IF EXISTS public.user_roles ENABLE ROW LEVEL SECURITY;
 
--- Drop existing policy if it exists
+-- Drop existing policies if they exist (to avoid conflicts)
 DROP POLICY IF EXISTS "Users can view own roles" ON public.user_roles;
+DROP POLICY IF EXISTS "Users can view own roles anon" ON public.user_roles;
 
--- Create policy: Users can only see their own role
+-- Create policy: Users can only see their own role (authenticated users)
 CREATE POLICY "Users can view own roles"
 ON public.user_roles
 FOR SELECT

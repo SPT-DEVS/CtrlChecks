@@ -220,98 +220,102 @@ export default function FormTrigger() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
-            {formConfig.fields.map((field) => (
-              <div key={field.name} className="space-y-2">
-                <label
-                  htmlFor={field.name}
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-200"
-                >
-                  {field.label}
-                  {field.required && <span className="text-red-500 ml-1">*</span>}
-                </label>
-
-                {field.type === 'textarea' ? (
-                  <textarea
-                    id={field.name}
-                    name={field.name}
-                    required={field.required}
-                    placeholder={field.placeholder}
-                    defaultValue={field.defaultValue}
-                    rows={4}
-                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark:bg-gray-700 dark:text-white"
-                  />
-                ) : field.type === 'select' ? (
-                  <select
-                    id={field.name}
-                    name={field.name}
-                    required={field.required}
-                    defaultValue={field.defaultValue}
-                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark:bg-gray-700 dark:text-white"
+            {formConfig.fields.map((field) => {
+              // Create unique field ID using workflowId, nodeId, and field name to prevent duplicates
+              const fieldId = `form-${workflowId}-${nodeId}-${field.name}`;
+              return <div key={field.name} className="space-y-2">
+                  <label
+                    htmlFor={fieldId}
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-200"
                   >
-                    <option value="">Select...</option>
-                    {(field.options || []).map((opt) => {
-                      const value = typeof opt === 'string' ? opt : opt.value;
-                      const label = typeof opt === 'string' ? opt : opt.label;
-                      return (
-                        <option key={value} value={value}>
-                          {label}
-                        </option>
-                      );
-                    })}
-                  </select>
-                ) : field.type === 'checkbox' ? (
-                  <input
-                    type="checkbox"
-                    id={field.name}
-                    name={field.name}
-                    defaultChecked={field.defaultValue === 'true'}
-                    required={field.required}
-                    className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
-                  />
-                ) : field.type === 'radio' ? (
-                  <div className="space-y-2">
-                    {(field.options || []).map((opt, idx) => {
-                      const value = typeof opt === 'string' ? opt : opt.value;
-                      const label = typeof opt === 'string' ? opt : opt.label;
-                      return (
-                        <label key={idx} className="flex items-center space-x-2">
-                          <input
-                            type="radio"
-                            name={field.name}
-                            value={value}
-                            required={field.required && idx === 0}
-                            className="w-4 h-4 text-purple-600 border-gray-300 focus:ring-purple-500"
-                          />
-                          <span className="text-sm text-gray-700 dark:text-gray-200">{label}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                ) : field.type === 'file' ? (
-                  <input
-                    type="file"
-                    id={field.name}
-                    name={field.name}
-                    required={field.required}
-                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark:bg-gray-700 dark:text-white"
-                  />
-                ) : (
-                  <input
-                    type={field.type === 'email' ? 'email' : field.type === 'number' ? 'number' : field.type === 'tel' ? 'tel' : field.type === 'url' ? 'url' : field.type === 'date' ? 'date' : 'text'}
-                    id={field.name}
-                    name={field.name}
-                    required={field.required}
-                    placeholder={field.placeholder}
-                    defaultValue={field.defaultValue}
-                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark:bg-gray-700 dark:text-white"
-                  />
-                )}
+                    {field.label}
+                    {field.required && <span className="text-red-500 ml-1">*</span>}
+                  </label>
+
+                  {field.type === 'textarea' ? (
+                    <textarea
+                      id={fieldId}
+                      name={field.name}
+                      required={field.required}
+                      placeholder={field.placeholder}
+                      defaultValue={field.defaultValue}
+                      rows={4}
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark:bg-gray-700 dark:text-white"
+                    />
+                  ) : field.type === 'select' ? (
+                    <select
+                      id={fieldId}
+                      name={field.name}
+                      required={field.required}
+                      defaultValue={field.defaultValue}
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark:bg-gray-700 dark:text-white"
+                    >
+                      <option value="">Select...</option>
+                      {(field.options || []).map((opt) => {
+                        const value = typeof opt === 'string' ? opt : opt.value;
+                        const label = typeof opt === 'string' ? opt : opt.label;
+                        return (
+                          <option key={value} value={value}>
+                            {label}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  ) : field.type === 'checkbox' ? (
+                    <input
+                      type="checkbox"
+                      id={fieldId}
+                      name={field.name}
+                      defaultChecked={field.defaultValue === 'true'}
+                      required={field.required}
+                      className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+                    />
+                  ) : field.type === 'radio' ? (
+                    <div className="space-y-2">
+                      {(field.options || []).map((opt, idx) => {
+                        const value = typeof opt === 'string' ? opt : opt.value;
+                        const label = typeof opt === 'string' ? opt : opt.label;
+                        const radioId = `${fieldId}-${idx}-${value}`;
+                        return (
+                          <label key={idx} htmlFor={radioId} className="flex items-center space-x-2">
+                            <input
+                              type="radio"
+                              id={radioId}
+                              name={field.name}
+                              value={value}
+                              required={field.required && idx === 0}
+                              className="w-4 h-4 text-purple-600 border-gray-300 focus:ring-purple-500"
+                            />
+                            <span className="text-sm text-gray-700 dark:text-gray-200">{label}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  ) : field.type === 'file' ? (
+                    <input
+                      type="file"
+                      id={fieldId}
+                      name={field.name}
+                      required={field.required}
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark:bg-gray-700 dark:text-white"
+                    />
+                  ) : (
+                    <input
+                      type={field.type === 'email' ? 'email' : field.type === 'number' ? 'number' : field.type === 'tel' ? 'tel' : field.type === 'url' ? 'url' : field.type === 'date' ? 'date' : 'text'}
+                      id={fieldId}
+                      name={field.name}
+                      required={field.required}
+                      placeholder={field.placeholder}
+                      defaultValue={field.defaultValue}
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark:bg-gray-700 dark:text-white"
+                    />
+                  )}
 
                 {field.helpText && (
                   <p className="text-xs text-gray-500 dark:text-gray-400">{field.helpText}</p>
                 )}
-              </div>
-            ))}
+              </div>;
+            })}
 
             {submitError && (
               <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-4">
