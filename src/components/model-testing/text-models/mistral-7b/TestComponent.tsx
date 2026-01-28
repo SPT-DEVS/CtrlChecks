@@ -54,8 +54,10 @@ export default function Mistral7BTestComponent() {
         ]
       };
 
+      // Multimodal functionality has been removed
+      // Using AI chat endpoint instead for text generation
       const { data: sessionData } = await supabase.auth.getSession();
-      const response = await fetch(`${ENDPOINTS.itemBackend}/execute-multimodal-agent`, {
+      const response = await fetch(`${ENDPOINTS.itemBackend}/api/ai/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -64,12 +66,9 @@ export default function Mistral7BTestComponent() {
             : {}),
         },
         body: JSON.stringify({
-          input: testCase.input,
-          pipeline: pipeline,
-          models: [{
-            name: testConfig.model.name,
-            provider: testConfig.model.provider
-          }]
+          message: testCase.input,
+          model: testConfig.model.name,
+          system: 'You are a helpful assistant.',
         }),
       });
 
@@ -93,8 +92,9 @@ export default function Mistral7BTestComponent() {
       }
 
       const data = await response.json();
-      if (data && data.success) {
-        const output = data.output || '';
+      // Handle AI chat endpoint response format
+      const output = data.response || data.content || data.output || data.message || '';
+      if (data && (data.success || output)) {
         const isFallback = data.isFallback || 
                           output.startsWith('Processed:') ||
                           output.startsWith('[AI Processing]') ||

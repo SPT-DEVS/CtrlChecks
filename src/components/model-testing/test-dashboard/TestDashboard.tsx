@@ -233,14 +233,6 @@ export default function TestDashboard() {
               <FileText className="mr-2 h-4 w-4" />
               Debugging Guide
             </Button>
-            <Button
-              variant="outline"
-              className="justify-start"
-              onClick={() => navigate('/multimodal')}
-            >
-              <TestTube className="mr-2 h-4 w-4" />
-              Multimodal Builder
-            </Button>
           </div>
         </CardContent>
       </Card>

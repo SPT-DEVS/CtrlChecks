@@ -4,7 +4,25 @@
  * Transforms backend pipeline data into frontend format
  */
 
-import { PipelineStep, StepStatus } from '@/components/multimodal/PipelineBuilderView';
+// Types moved inline since multimodal components were removed
+export type StepStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
+export interface PipelineStep {
+  id: string;
+  stepNumber: number;
+  type: string;
+  description: string;
+  toolId?: string;
+  toolName?: string;
+  task?: string;
+  modelName?: string;
+  modelProvider?: string;
+  inputSchema?: any;
+  outputSchema?: any;
+  status: StepStatus;
+  error?: string;
+  result?: any;
+  executionTime?: number;
+}
 import { PROCESSORS_REGISTRY, getToolByTask } from './tools-registry';
 
 /**

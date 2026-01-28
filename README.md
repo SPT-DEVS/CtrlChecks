@@ -11,7 +11,6 @@ React/TypeScript frontend application for the CtrlChecks AI Workflow Platform.
 - ✅ Workflow builder with visual editor
 - ✅ AI-powered workflow generation
 - ✅ Real-time execution monitoring
-- ✅ Multimodal AI processing
 - ✅ Template management
 - ✅ Form and webhook triggers
 
@@ -93,7 +92,6 @@ ctrl_checks/
 │   │   ├── ui/           # Shadcn/ui components
 │   │   ├── workflow/     # Workflow builder components
 │   │   ├── chat/         # Chat components
-│   │   └── multimodal/   # Multimodal processing components
 │   ├── pages/            # Page components
 │   ├── lib/              # Utility libraries
 │   ├── hooks/            # Custom React hooks
@@ -154,7 +152,6 @@ Components are organized by feature:
 - `components/ui/` - Reusable UI components (Shadcn/ui)
 - `components/workflow/` - Workflow-specific components
 - `components/chat/` - Chat interface components
-- `components/multimodal/` - Multimodal processing components
 
 ### State Management
 

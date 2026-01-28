@@ -27,7 +27,6 @@ import { AdminRoute } from "./components/admin/AdminRoute";
 import NotFound from "./pages/NotFound";
 import GoogleAuthCallback from "./pages/auth/google/Callback";
 import FormTrigger from "./pages/FormTrigger";
-import MultimodalBuilder from "./pages/MultimodalBuilder";
 import ModelTestingDashboard from "./pages/ModelTestingDashboard";
 import ModelTestPage from "./pages/ModelTestPage";
 import SchedulerInitializer from "./components/workflow/SchedulerInitializer";
@@ -79,8 +78,6 @@ const App = () => (
                 <Route path="/admin/template/:id/edit" element={<AdminRoute><TemplateEditor /></AdminRoute>} />
                 <Route path="/auth/google/callback" element={<GoogleAuthCallback />} />
                 <Route path="/form/:workflowId/:nodeId" element={<FormTrigger />} />
-                <Route path="/multimodal" element={<MultimodalBuilder />} />
-                <Route path="/multimodal-builder" element={<MultimodalBuilder />} />
                 <Route path="/model-testing" element={<ModelTestingDashboard />} />
                 <Route path="/model-testing/:category/:model" element={<ModelTestPage />} />
                 <Route path="*" element={<NotFound />} />

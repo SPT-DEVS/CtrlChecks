@@ -55,7 +55,7 @@ Write-Host "When you start the backend, look for these log lines:" -ForegroundCo
 Write-Host ""
 Write-Host "✅ CORRECT (Using Remote):" -ForegroundColor Green
 Write-Host "   OLLAMA_BASE_URL configured: https://diego-ski-deutsche-choir.trycloudflare.com" -ForegroundColor Gray
-Write-Host "   TextProcessor initialized with Ollama at https://diego-ski-deutsche-choir.trycloudflare.com" -ForegroundColor Gray
+Write-Host "   Ollama configured at https://diego-ski-deutsche-choir.trycloudflare.com" -ForegroundColor Gray
 Write-Host "   Skipping local FastAPI backend check - using remote Ollama API" -ForegroundColor Gray
 Write-Host "   Calling Ollama API at: https://diego-ski-deutsche-choir.trycloudflare.com/api/chat" -ForegroundColor Gray
 Write-Host ""
