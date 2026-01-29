@@ -154,12 +154,15 @@ export function validateAndFixWorkflow(data: any): { nodes: any[], edges: any[],
         
         if (needsNormalization) {
             const definition = NODE_TYPES.find((d: any) => d.type === nodeType);
+            // Preserve existing label if it exists (from AI generation)
+            const preservedLabel = node.data?.label || node.label;
+            
             if (definition) {
                 return {
                     ...node,
                     type: 'custom',
                     data: {
-                        label: definition.label,
+                        label: preservedLabel || definition.label, // Use preserved label if available
                         type: definition.type,
                         category: definition.category,
                         icon: definition.icon,
@@ -178,7 +181,7 @@ export function validateAndFixWorkflow(data: any): { nodes: any[], edges: any[],
                     ...node,
                     type: 'custom',
                     data: {
-                        label: node.data?.label || nodeType,
+                        label: preservedLabel || nodeType, // Preserve AI-generated label
                         type: nodeType,
                         category: node.data?.category || 'data',
                         icon: node.data?.icon || 'Box',
