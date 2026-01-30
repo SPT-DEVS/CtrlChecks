@@ -1791,7 +1791,8 @@ export function AutonomousAgentWizard() {
                                         if (generatedWorkflowId) {
                                             console.log('Navigating to workflow:', generatedWorkflowId);
                                             // Use replace to prevent back button issues and ensure clean navigation
-                                            navigate(`/workflow/${generatedWorkflowId}`, { replace: false });
+                                            // Add autoRun query parameter to automatically start the workflow
+                                            navigate(`/workflow/${generatedWorkflowId}?autoRun=true`, { replace: false });
                                         } else {
                                             console.error('Cannot navigate: generatedWorkflowId is null');
                                             toast({

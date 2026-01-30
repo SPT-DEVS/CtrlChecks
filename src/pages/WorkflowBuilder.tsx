@@ -1,5 +1,5 @@
-import { useEffect, useCallback, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useEffect, useCallback, useState, useRef } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { useWorkflowStore, WorkflowNode } from '@/stores/workflowStore';
 import { supabase } from '@/integrations/supabase/client';
@@ -23,6 +23,7 @@ import { validateAndFixWorkflow } from '@/lib/workflowValidation';
 export default function WorkflowBuilder() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user, loading: authLoading } = useAuth();
   const [isSaving, setIsSaving] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
@@ -31,6 +32,7 @@ export default function WorkflowBuilder() {
   const [nodeLibraryOpen, setNodeLibraryOpen] = useState(true);
   const [propertiesPanelOpen, setPropertiesPanelOpen] = useState(true);
   const { debugNodeId } = useDebugStore();
+  const hasAutoRun = useRef(false); // Track if we've already auto-run for this workflow load
   const {
     nodes,
     edges,
@@ -54,6 +56,8 @@ export default function WorkflowBuilder() {
     try {
       // CRITICAL: Reset state first to prevent stale data
       resetWorkflow();
+      // Reset auto-run flag when loading a new workflow
+      hasAutoRun.current = false;
       
       const { data, error } = await supabase
         .from('workflows')
@@ -83,7 +87,10 @@ export default function WorkflowBuilder() {
           title: 'Workflow loaded',
           description: `Successfully loaded "${data.name}"`,
         });
+        
+        return true; // Return success indicator
       }
+      return false;
     } catch (error) {
       console.error('Error loading workflow:', error);
       toast({
@@ -93,6 +100,7 @@ export default function WorkflowBuilder() {
       });
       // Reset on error to prevent corrupted state
       resetWorkflow();
+      return false;
     } finally {
       setIsLoading(false);
     }
@@ -102,6 +110,9 @@ export default function WorkflowBuilder() {
   // CRITICAL: This effect must run whenever the route ID changes
   useEffect(() => {
     if (!user) return; // Wait for auth
+    
+    // Reset auto-run flag when workflow ID changes
+    hasAutoRun.current = false;
     
     if (id && id !== 'new') {
       // Check if we're already loading this workflow to prevent duplicate loads
@@ -113,6 +124,9 @@ export default function WorkflowBuilder() {
       resetWorkflow();
     }
   }, [id, user, loadWorkflow, resetWorkflow]);
+
+  // Auto-run workflow if autoRun parameter is present (for AI-generated workflows)
+  // Note: This useEffect is moved after handleRun definition to avoid initialization order issues
 
   const handleSave = useCallback(async () => {
     if (!user) return;
@@ -490,6 +504,32 @@ export default function WorkflowBuilder() {
     }
   }, [nodes, consoleExpanded, resetAllNodeStatuses]);
 
+  // Auto-run workflow if autoRun parameter is present (for AI-generated workflows)
+  // Moved here after handleRun is defined to avoid initialization order issues
+  useEffect(() => {
+    // Only run if:
+    // 1. User is authenticated
+    // 2. Workflow is loaded (not loading, has nodes)
+    // 3. autoRun parameter is present
+    // 4. We haven't already auto-run for this workflow
+    if (!user || isLoading || nodes.length === 0) return;
+    
+    const autoRunParam = searchParams.get('autoRun');
+    const currentWorkflowId = useWorkflowStore.getState().workflowId;
+    
+    if (autoRunParam === 'true' && currentWorkflowId === id && !hasAutoRun.current) {
+      hasAutoRun.current = true;
+      // Remove the autoRun parameter from URL to prevent re-running on refresh
+      const newSearchParams = new URLSearchParams(searchParams);
+      newSearchParams.delete('autoRun');
+      setSearchParams(newSearchParams, { replace: true });
+      
+      // Small delay to ensure workflow state is fully set
+      setTimeout(() => {
+        handleRun(false);
+      }, 500);
+    }
+  }, [user, isLoading, nodes.length, searchParams, setSearchParams, id, handleRun]);
 
   const onDragStart = useCallback((event: React.DragEvent, nodeType: NodeTypeDefinition) => {
     event.dataTransfer.setData('application/reactflow', JSON.stringify(nodeType));
