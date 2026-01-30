@@ -148,7 +148,28 @@ export function generateFieldGuide(
     return generateTokenGuide(nodeType, fieldLabel);
   }
 
-  // Credential/Secret fields
+  // Credential/Secret fields - Check for specific credentials first
+  if (combined.includes('slack') && combined.includes('webhook')) {
+    return generateSlackWebhookGuide();
+  }
+  if (combined.includes('google') && (combined.includes('oauth') || combined.includes('client'))) {
+    if (combined.includes('secret')) {
+      return generateGoogleOAuthSecretGuide();
+    }
+    return generateGoogleOAuthClientIDGuide();
+  }
+  if (combined.includes('smtp')) {
+    if (combined.includes('host')) {
+      return generateSMTPHostGuide();
+    }
+    if (combined.includes('username') || combined.includes('user')) {
+      return generateSMTPUsernameGuide();
+    }
+    if (combined.includes('password') || combined.includes('pass')) {
+      return generateSMTPPasswordGuide();
+    }
+    return generateSMTPGuide();
+  }
   if (combined.includes('credential') || combined.includes('password') || combined.includes('secret') || 
       combined.includes('auth') || combined.includes('client secret')) {
     return generateCredentialGuide(nodeType, fieldLabel);
@@ -305,6 +326,64 @@ export function generateFieldGuide(
 }
 
 function generateAPIKeyGuide(nodeType: string, fieldLabel: string): FieldGuide {
+  const lowerLabel = fieldLabel.toLowerCase();
+  
+  // Check for specific services in fieldLabel
+  if (lowerLabel.includes('google sheets') || lowerLabel.includes('sheets api')) {
+    return {
+      title: 'How to get Google Sheets API?',
+      url: 'https://console.cloud.google.com',
+      steps: [
+        'Step 1: Go to https://console.cloud.google.com',
+        'Step 2: Sign in with your Google account',
+        'Step 3: Create a new project or select an existing project',
+        'Step 4: Click "APIs & Services" → "Library"',
+        'Step 5: Search for "Google Sheets API"',
+        'Step 6: Click on "Google Sheets API" and click "Enable"',
+        'Step 7: Go to "APIs & Services" → "Credentials"',
+        'Step 8: Click "Create Credentials" → "API Key"',
+        'Step 9: Copy the API key immediately',
+        'Step 10: (Optional) Restrict the API key to Google Sheets API for security',
+        'Step 11: Paste the API key into the input field',
+        '',
+        'Example format:',
+        'AIzaSyDxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+        '',
+        '⚠️ Keep your API key secure. Restrict it to specific APIs and services.'
+      ],
+      example: 'AIzaSyDxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+      securityWarning: true
+    };
+  }
+  
+  if (lowerLabel.includes('slack') && lowerLabel.includes('api')) {
+    return {
+      title: 'How to get Slack API?',
+      url: 'https://api.slack.com/apps',
+      steps: [
+        'Step 1: Go to https://api.slack.com/apps',
+        'Step 2: Sign in with your Slack workspace',
+        'Step 3: Click "Create New App" or select an existing app',
+        'Step 4: Choose "From scratch"',
+        'Step 5: Enter app name and select workspace',
+        'Step 6: Go to "OAuth & Permissions" in left sidebar',
+        'Step 7: Scroll to "Scopes" → "Bot Token Scopes"',
+        'Step 8: Add required scopes (e.g., chat:write, channels:read)',
+        'Step 9: Scroll up and click "Install to Workspace"',
+        'Step 10: Authorize the app',
+        'Step 11: Copy the "Bot User OAuth Token" (starts with xoxb-)',
+        'Step 12: Paste it into the input field',
+        '',
+        'Example format:',
+        'xoxb-YOUR-BOT-TOKEN-HERE',
+        '',
+        '⚠️ Keep your Bot Token secure. Never expose it publicly.'
+      ],
+      example: 'xoxb-YOUR-BOT-TOKEN-HERE',
+      securityWarning: true
+    };
+  }
+  
   const guides: Record<string, FieldGuide> = {
     google_gemini: {
       title: 'How to get Gemini API Key?',
@@ -1369,20 +1448,280 @@ function generateMessageGuide(fieldLabel: string): FieldGuide {
   };
 }
 
+function generateSlackWebhookGuide(): FieldGuide {
+  return {
+    title: 'How to get Slack Webhook URL?',
+    url: 'https://api.slack.com/apps',
+    steps: [
+      'Step 1: Go to https://api.slack.com/apps',
+      'Step 2: Sign in with your Slack workspace',
+      'Step 3: Click "Create New App" or select an existing app',
+      'Step 4: Choose "From scratch"',
+      'Step 5: Enter app name and select workspace',
+      'Step 6: Go to "Incoming Webhooks" in left sidebar',
+      'Step 7: Toggle "Activate Incoming Webhooks" to ON',
+      'Step 8: Click "Add New Webhook to Workspace"',
+      'Step 9: Select the channel where messages should be posted',
+      'Step 10: Click "Allow"',
+      'Step 11: Copy the Webhook URL (starts with https://hooks.slack.com/services/)',
+      'Step 12: Paste it into the input field',
+      '',
+      'Example format:',
+      'https://hooks.slack.com/services/YOUR-WORKSPACE-ID/YOUR-CHANNEL-ID/YOUR-WEBHOOK-TOKEN',
+      '',
+      '⚠️ Keep your webhook URL secure. Anyone with this URL can post to your Slack channel.'
+    ],
+    example: 'https://hooks.slack.com/services/YOUR-WORKSPACE-ID/YOUR-CHANNEL-ID/YOUR-WEBHOOK-TOKEN',
+    securityWarning: true
+  };
+}
+
+function generateGoogleOAuthClientIDGuide(): FieldGuide {
+  return {
+    title: 'How to get Google OAuth Client ID?',
+    url: 'https://console.cloud.google.com',
+    steps: [
+      'Step 1: Go to https://console.cloud.google.com',
+      'Step 2: Sign in with your Google account',
+      'Step 3: Create a new project or select an existing project',
+      'Step 4: Click "APIs & Services" → "Credentials"',
+      'Step 5: Click "Create Credentials" → "OAuth client ID"',
+      'Step 6: If prompted, configure the OAuth consent screen:',
+      '   • Choose "External" (unless you have Google Workspace)',
+      '   • Fill in app name, user support email, developer contact',
+      '   • Add scopes (e.g., https://www.googleapis.com/auth/spreadsheets)',
+      '   • Add test users if needed',
+      'Step 7: Back in Credentials, select "Web application" as application type',
+      'Step 8: Enter a name for your OAuth client',
+      'Step 9: Add authorized redirect URIs (if needed for your workflow)',
+      'Step 10: Click "Create"',
+      'Step 11: Copy the "Client ID" (long string ending in .apps.googleusercontent.com)',
+      'Step 12: Paste it into the input field',
+      '',
+      'Example format:',
+      '123456789-abcdefghijklmnopqrstuvwxyz123456.apps.googleusercontent.com',
+      '',
+      '⚠️ Keep your Client ID and Secret secure. Do not expose them publicly.'
+    ],
+    example: '123456789-abcdefghijklmnopqrstuvwxyz123456.apps.googleusercontent.com',
+    securityWarning: true
+  };
+}
+
+function generateGoogleOAuthSecretGuide(): FieldGuide {
+  return {
+    title: 'How to get Google OAuth Client Secret?',
+    url: 'https://console.cloud.google.com',
+    steps: [
+      'Step 1: Go to https://console.cloud.google.com',
+      'Step 2: Sign in with your Google account',
+      'Step 3: Select your project',
+      'Step 4: Click "APIs & Services" → "Credentials"',
+      'Step 5: Find your OAuth 2.0 Client ID in the list',
+      'Step 6: Click on the Client ID name to open details',
+      'Step 7: Look for "Client secret" section',
+      'Step 8: If secret is hidden, click "Show" or "Reveal"',
+      'Step 9: Copy the Client Secret (long random string)',
+      'Step 10: Paste it into the input field',
+      '',
+      'Note: If you don\'t see a secret, you may need to create a new OAuth client.',
+      'The secret is only shown once when created - save it securely!',
+      '',
+      'Example format:',
+      'GOCSPX-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+      '',
+      '⚠️ Keep your Client Secret secure. Never expose it publicly or commit it to version control.'
+    ],
+    example: 'GOCSPX-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+    securityWarning: true
+  };
+}
+
+function generateSMTPHostGuide(): FieldGuide {
+  return {
+    title: 'How to get SMTP Host?',
+    steps: [
+      'Step 1: Identify your email service provider',
+      'Step 2: Common SMTP host addresses:',
+      '   • Gmail: smtp.gmail.com',
+      '   • Outlook/Hotmail: smtp-mail.outlook.com',
+      '   • Yahoo: smtp.mail.yahoo.com',
+      '   • Custom domain: Check with your email provider',
+      'Step 3: For Gmail:',
+      '   • Host: smtp.gmail.com',
+      '   • Port: 587 (TLS) or 465 (SSL)',
+      'Step 4: For Outlook:',
+      '   • Host: smtp-mail.outlook.com',
+      '   • Port: 587',
+      'Step 5: For custom email (cPanel, etc.):',
+      '   • Check your hosting provider\'s documentation',
+      '   • Usually: mail.yourdomain.com or smtp.yourdomain.com',
+      'Step 6: Enter the SMTP host address (without port number)',
+      '',
+      'Example:',
+      'smtp.gmail.com'
+    ],
+    example: 'smtp.gmail.com'
+  };
+}
+
+function generateSMTPUsernameGuide(): FieldGuide {
+  return {
+    title: 'How to get SMTP Username?',
+    steps: [
+      'Step 1: Use your full email address as the username',
+      'Step 2: For Gmail:',
+      '   • Username: your-email@gmail.com',
+      '   • Or use App Password if 2FA is enabled',
+      'Step 3: For Outlook/Hotmail:',
+      '   • Username: your-email@outlook.com',
+      'Step 4: For custom email:',
+      '   • Username: your-email@yourdomain.com',
+      '   • Or just the part before @ (check with your provider)',
+      'Step 5: If using App Password (Gmail with 2FA):',
+      '   • Go to Google Account → Security → 2-Step Verification',
+      '   • Generate App Password',
+      '   • Use the generated password as username (or email)',
+      'Step 6: Enter your email address into the input field',
+      '',
+      'Example:',
+      'your-email@gmail.com'
+    ],
+    example: 'your-email@gmail.com'
+  };
+}
+
+function generateSMTPPasswordGuide(): FieldGuide {
+  return {
+    title: 'How to get SMTP Password?',
+    steps: [
+      'Step 1: For Gmail:',
+      '   • If 2FA is enabled: Generate App Password',
+      '   • Go to Google Account → Security → 2-Step Verification',
+      '   • Click "App passwords"',
+      '   • Select "Mail" and "Other (Custom name)"',
+      '   • Enter "Workflow" as name',
+      '   • Copy the 16-character password',
+      '   • If 2FA is NOT enabled: Use your regular Gmail password',
+      'Step 2: For Outlook/Hotmail:',
+      '   • Use your Microsoft account password',
+      '   • Or use App Password if 2FA is enabled',
+      'Step 3: For custom email:',
+      '   • Use your email account password',
+      '   • Check with your hosting provider for specific requirements',
+      'Step 4: Enter the password into the input field',
+      '',
+      '⚠️ Security Note:',
+      '• Never share your password',
+      '• Use App Passwords when 2FA is enabled',
+      '• Store passwords securely (use environment variables)',
+      '',
+      'Example (Gmail App Password):',
+      'abcd efgh ijkl mnop'
+    ],
+    example: 'abcd efgh ijkl mnop',
+    securityWarning: true
+  };
+}
+
+function generateSMTPGuide(): FieldGuide {
+  return {
+    title: 'How to configure SMTP?',
+    steps: [
+      'Step 1: Identify your email service provider',
+      'Step 2: Get SMTP settings from your provider:',
+      '   • SMTP Host (e.g., smtp.gmail.com)',
+      '   • SMTP Port (usually 587 for TLS or 465 for SSL)',
+      '   • Username (your email address)',
+      '   • Password (your email password or App Password)',
+      'Step 3: For Gmail:',
+      '   • Host: smtp.gmail.com',
+      '   • Port: 587',
+      '   • Username: your-email@gmail.com',
+      '   • Password: App Password (if 2FA enabled)',
+      'Step 4: For Outlook:',
+      '   • Host: smtp-mail.outlook.com',
+      '   • Port: 587',
+      '   • Username: your-email@outlook.com',
+      '   • Password: Your Microsoft account password',
+      'Step 5: Test the connection to verify settings are correct',
+      '',
+      '⚠️ Keep your SMTP credentials secure. Use environment variables in production.'
+    ],
+    securityWarning: true
+  };
+}
+
 function generateGenericGuide(fieldLabel: string, fieldType: string): FieldGuide {
+  const lowerLabel = fieldLabel.toLowerCase();
+  
+  // Try to detect service from fieldLabel
+  if (lowerLabel.includes('google sheets') || lowerLabel.includes('sheets')) {
+    return {
+      title: 'How to get Google Sheets API?',
+      url: 'https://console.cloud.google.com',
+      steps: [
+        'Step 1: Go to https://console.cloud.google.com',
+        'Step 2: Sign in with your Google account',
+        'Step 3: Create a new project or select an existing project',
+        'Step 4: Click "APIs & Services" → "Library"',
+        'Step 5: Search for "Google Sheets API" and click "Enable"',
+        'Step 6: Go to "APIs & Services" → "Credentials"',
+        'Step 7: Click "Create Credentials" → "API Key"',
+        'Step 8: Copy the API key and paste it into the input field',
+        '',
+        'Example format:',
+        'AIzaSyDxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+        '',
+        '⚠️ Keep your API key secure. Restrict it to specific APIs for security.'
+      ],
+      example: 'AIzaSyDxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+      securityWarning: true
+    };
+  }
+  
+  if (lowerLabel.includes('slack') && !lowerLabel.includes('webhook')) {
+    return {
+      title: 'How to get Slack API?',
+      url: 'https://api.slack.com/apps',
+      steps: [
+        'Step 1: Go to https://api.slack.com/apps',
+        'Step 2: Sign in with your Slack workspace',
+        'Step 3: Click "Create New App" or select an existing app',
+        'Step 4: Choose "From scratch" and enter app details',
+        'Step 5: Go to "OAuth & Permissions" in left sidebar',
+        'Step 6: Add required Bot Token Scopes (e.g., chat:write, channels:read)',
+        'Step 7: Click "Install to Workspace" and authorize',
+        'Step 8: Copy the "Bot User OAuth Token" (starts with xoxb-)',
+        'Step 9: Paste it into the input field',
+        '',
+        'Example format:',
+        'xoxb-YOUR-BOT-TOKEN-HERE',
+        '',
+        '⚠️ Keep your Bot Token secure. Never expose it publicly.'
+      ],
+      example: 'xoxb-YOUR-BOT-TOKEN-HERE',
+      securityWarning: true
+    };
+  }
+  
   return {
     title: `How to get ${fieldLabel}?`,
     steps: [
-      'Step 1: Check the service provider\'s official documentation',
-      'Step 2: Look for integration guides or API setup instructions',
-      'Step 3: Navigate to your account settings or developer portal',
-      'Step 4: Find the relevant section for this configuration',
-      'Step 5: Follow the step-by-step setup process provided by the service',
-      'Step 6: Copy the value and paste it into the input field',
-      'Step 7: Verify the value is correct by testing the connection',
-      'Step 8: Contact the service support if you need additional help',
+      'Step 1: Identify the service or platform you need credentials from',
+      'Step 2: Go to the service\'s official developer portal or dashboard',
+      'Step 3: Sign in with your account or create a new account',
+      'Step 4: Navigate to "API Keys", "Credentials", or "Developer Settings"',
+      'Step 5: Create a new API key, token, or credential',
+      'Step 6: Give it a descriptive name (e.g., "Workflow Integration")',
+      'Step 7: Select the required permissions or scopes',
+      'Step 8: Copy the credential immediately - it may only be shown once',
+      'Step 9: Paste it into the input field above',
+      'Step 10: Test the connection to verify it works',
       '',
-      `Field Type: ${fieldType}`
+      `Field Type: ${fieldType}`,
+      '',
+      '💡 Tip: Check the service\'s official documentation for specific setup instructions.'
     ]
   };
 }

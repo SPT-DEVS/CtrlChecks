@@ -20,8 +20,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { validateAndFixWorkflow } from '@/lib/workflowValidation';
 import { useTheme } from '@/hooks/useTheme';
 import { InputGuideLink } from './InputGuideLink';
+import { GlassBlurLoader } from '@/components/ui/glass-blur-loader';
 
-type WizardStep = 'idle' | 'analyzing' | 'questioning' | 'refining' | 'confirmation' | 'building' | 'complete';
+type WizardStep = 'idle' | 'analyzing' | 'questioning' | 'refining' | 'confirmation' | 'credentials' | 'building' | 'complete';
 
 interface AgentQuestion {
     id: string;
@@ -61,6 +62,9 @@ export function AutonomousAgentWizard() {
     const [refinement, setRefinement] = useState<RefinementResult | null>(null);
     const [requirementsMode, setRequirementsMode] = useState<'ai' | 'manual'>('ai');
     const [requirementValues, setRequirementValues] = useState<Record<string, string>>({});
+    const [requiredCredentials, setRequiredCredentials] = useState<string[]>([]);
+    const [credentialValues, setCredentialValues] = useState<Record<string, string>>({});
+    const [showCredentialStep, setShowCredentialStep] = useState(false);
     const [buildingLogs, setBuildingLogs] = useState<string[]>([]);
     const [generatedWorkflowId, setGeneratedWorkflowId] = useState<string | null>(null);
     const [progress, setProgress] = useState(0);
@@ -324,23 +328,20 @@ export function AutonomousAgentWizard() {
         };
 
         try {
-            // Build config with requirement values and requirements metadata for AI auto-fill
+            // Build config with requirement values, credentials, and requirements metadata for AI auto-fill
             const config = {
                 ...requirementValues,
+                ...credentialValues, // Include collected credentials
                 ollamaBaseUrl: ENDPOINTS.itemBackend,
                 // Pass requirements metadata so backend can intelligently fill fields
                 requirements: refinement?.requirements || {},
-                requirementsMode: requirementsMode, // 'ai' or 'manual'
-                // Include all requirement values for auto-fill
-                ...(requirementsMode === 'ai' && refinement?.requirements ? {
-                    // When AI mode, pass requirements so backend can auto-fill
-                    autoFill: true,
-                    urls: refinement.requirements.urls || [],
-                    apis: refinement.requirements.apis || [],
-                    credentials: refinement.requirements.credentials || [],
-                    schedules: refinement.requirements.schedules || [],
-                    platforms: refinement.requirements.platforms || [],
-                } : {})
+                requirementsMode: 'manual', // Always manual - user provides credentials directly
+                // Include all requirement values
+                urls: refinement.requirements?.urls || [],
+                apis: refinement.requirements?.apis || [],
+                credentials: refinement.requirements?.credentials || [],
+                schedules: refinement.requirements?.schedules || [],
+                platforms: refinement.requirements?.platforms || [],
             };
 
             // Get Supabase URL and session token
@@ -433,6 +434,27 @@ export function AutonomousAgentWizard() {
                             const hasNodes = nodes && Array.isArray(nodes) && nodes.length > 0;
                             const hasEdges = edges && Array.isArray(edges);
                             const isCompleted = update.status === 'completed' || update.status === 'success' || update.success === true || (hasNodes && hasEdges);
+                            
+                            // Check for required credentials BEFORE completion
+                            if (update.requiredCredentials && Array.isArray(update.requiredCredentials) && update.requiredCredentials.length > 0) {
+                                const missingCreds = update.requiredCredentials.filter((cred: string) => {
+                                    // Check if credential is provided in config
+                                    const credLower = cred.toLowerCase();
+                                    const provided = Object.keys(config).some(key => 
+                                        key.toLowerCase().includes(credLower.replace(/_/g, '').replace(/api|key|token/gi, ''))
+                                    );
+                                    return !provided;
+                                });
+                                
+                                if (missingCreds.length > 0) {
+                                    setRequiredCredentials(missingCreds);
+                                    setShowCredentialStep(true);
+                                    setStep('credentials'); // New step for credential collection
+                                    stopFallbackProgress();
+                                    setBuildingLogs(prev => [...prev, `⚠️ ${missingCreds.length} credential(s) required`]);
+                                    return; // Don't complete yet, wait for credentials
+                                }
+                            }
                             
                             if (isCompleted) {
                                 // Stop fallback progress
@@ -742,22 +764,10 @@ export function AutonomousAgentWizard() {
 
                     {/* Loading state for analyzing */}
                     {step === 'analyzing' && (
-                        <motion.div
-                            initial={{ opacity: 0 }} 
-                            animate={{ opacity: 1 }}
-                            className="flex flex-col items-center justify-center py-20 gap-6"
-                        >
-                            <div className="relative">
-                                <div className="absolute inset-0 bg-indigo-500 blur-2xl opacity-20 animate-pulse rounded-full" />
-                                <Loader2 className="h-16 w-16 text-indigo-400 animate-spin relative z-10" />
-                            </div>
-                            <div className="text-center space-y-2">
-                                <h3 className="text-xl font-medium">Analyzing Requirements...</h3>
-                                <p className="text-muted-foreground text-sm max-w-md mx-auto">
-                                    Decomposing your request into logical steps and identifying necessary integrations.
-                                </p>
-                            </div>
-                        </motion.div>
+                        <GlassBlurLoader 
+                            text="Analyzing Requirements..."
+                            description="Decomposing your request into logical steps and identifying necessary integrations."
+                        />
                     )}
 
                     {/* STEP 2: Questions */}
@@ -848,14 +858,10 @@ export function AutonomousAgentWizard() {
 
                     {/* Loading state for refining */}
                     {step === 'refining' && (
-                        <motion.div
-                            initial={{ opacity: 0 }} 
-                            animate={{ opacity: 1 }}
-                            className="flex flex-col items-center justify-center py-20 gap-6"
-                        >
-                            <Loader2 className="h-12 w-12 text-purple-400 animate-spin" />
-                            <h3 className="text-xl font-medium">Refining Workflow Plan...</h3>
-                        </motion.div>
+                        <GlassBlurLoader 
+                            text="Refining Workflow Plan..."
+                            description="Processing your answers and generating the final workflow structure."
+                        />
                     )}
 
                     {/* STEP 3: Final Prompt */}
@@ -899,71 +905,24 @@ export function AutonomousAgentWizard() {
                                             <CardContent className="space-y-6">
                                                 {Array.isArray(refinement.requirements) ? (
                                                     // Legacy format - array of requirement objects
-                                                    <>
-                                                        <RadioGroup value={requirementsMode} onValueChange={(v: any) => setRequirementsMode(v)} className="flex flex-wrap gap-4 p-1">
-                                                            <div className={`flex items-center space-x-2 px-4 py-3 rounded-lg border transition-all cursor-pointer ${requirementsMode === 'ai' ? 'bg-indigo-500/20 border-indigo-500' : 'bg-muted/30 border-border'}`}>
-                                                                <RadioGroupItem value="ai" id="mode-ai" className="text-indigo-500" />
-                                                                <Label htmlFor="mode-ai" className="cursor-pointer font-medium">Let AI handle everything (Auto)</Label>
+                                                    <div className="grid gap-4 animate-in fade-in slide-in-from-bottom-2">
+                                                        {refinement.requirements.map((req: any) => (
+                                                            <div key={req.key} className="gap-2 grid">
+                                                                <Label>{req.label}</Label>
+                                                                <Input
+                                                                    placeholder={req.description}
+                                                                    className="h-10"
+                                                                    value={requirementValues[req.key] || ''}
+                                                                    onChange={(e) => setRequirementValues({ ...requirementValues, [req.key]: e.target.value })}
+                                                                />
                                                             </div>
-                                                            <div className={`flex items-center space-x-2 px-4 py-3 rounded-lg border transition-all cursor-pointer ${requirementsMode === 'manual' ? 'bg-indigo-500/20 border-indigo-500' : 'bg-muted/30 border-border'}`}>
-                                                                <RadioGroupItem value="manual" id="mode-manual" className="text-indigo-500" />
-                                                                <Label htmlFor="mode-manual" className="cursor-pointer font-medium">I'll Configure (Manual)</Label>
-                                                            </div>
-                                                        </RadioGroup>
-
-                                                        {requirementsMode === 'manual' && (
-                                                            <div className="grid gap-4 animate-in fade-in slide-in-from-bottom-2">
-                                                                {refinement.requirements.map((req: any) => (
-                                                                    <div key={req.key} className="gap-2 grid">
-                                                                        <Label>{req.label}</Label>
-                                                                        <Input
-                                                                            placeholder={req.description}
-                                                                            className="h-10"
-                                                                            value={requirementValues[req.key] || ''}
-                                                                            onChange={(e) => setRequirementValues({ ...requirementValues, [req.key]: e.target.value })}
-                                                                        />
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        )}
-                                                    </>
+                                                        ))}
+                                                    </div>
                                                 ) : (
                                                     // New format - object with arrays
                                                     <div className="space-y-6">
-                                                        <RadioGroup value={requirementsMode} onValueChange={(v: any) => setRequirementsMode(v)} className="flex flex-wrap gap-4 p-1">
-                                                            <div className={`flex items-center space-x-2 px-4 py-3 rounded-lg border transition-all cursor-pointer ${requirementsMode === 'ai' ? 'bg-indigo-500/20 border-indigo-500' : 'bg-muted/30 border-border'}`}>
-                                                                <RadioGroupItem value="ai" id="mode-ai-new" className="text-indigo-500" />
-                                                                <Label htmlFor="mode-ai-new" className="cursor-pointer font-medium">Let AI handle everything (Auto)</Label>
-                                                            </div>
-                                                            <div className={`flex items-center space-x-2 px-4 py-3 rounded-lg border transition-all cursor-pointer ${requirementsMode === 'manual' ? 'bg-indigo-500/20 border-indigo-500' : 'bg-muted/30 border-border'}`}>
-                                                                <RadioGroupItem value="manual" id="mode-manual-new" className="text-indigo-500" />
-                                                                <Label htmlFor="mode-manual-new" className="cursor-pointer font-medium">I'll Configure (Manual)</Label>
-                                                            </div>
-                                                        </RadioGroup>
 
-                                                        {requirementsMode === 'ai' && (
-                                                            <div className="p-4 rounded-lg bg-indigo-500/10 border border-indigo-500/20">
-                                                                <div className="flex items-start gap-3">
-                                                                    <Sparkles className="h-5 w-5 text-indigo-400 mt-0.5" />
-                                                                    <div className="flex-1">
-                                                                        <p className="text-sm font-medium text-indigo-300 mb-1">AI Auto-Fill Enabled</p>
-                                                                        <p className="text-xs text-muted-foreground">
-                                                                            The Autonomous Workflow Agent will automatically fill all node input fields, credentials, and configuration values based on your requirements. The workflow will be 100% ready to run without errors.
-                                                                        </p>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        )}
-
-                                                        {requirementsMode === 'manual' && (
-                                                            <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                                                                <p className="text-xs text-muted-foreground">
-                                                                    <strong className="text-amber-400">Manual Mode:</strong> You'll need to fill in the fields below. The agent will use your provided values.
-                                                                </p>
-                                                            </div>
-                                                        )}
-
-                                                        {requirementsMode === 'manual' && refinement.requirements.urls && refinement.requirements.urls.length > 0 && (
+                                                        {refinement.requirements.urls && refinement.requirements.urls.length > 0 && (
                                                             <div className="space-y-4">
                                                                 <div>
                                                                     <Label className="text-sm font-medium mb-2 block">URLs Required:</Label>
@@ -1006,7 +965,7 @@ export function AutonomousAgentWizard() {
                                                                 </div>
                                                             </div>
                                                         )}
-                                                        {requirementsMode === 'manual' && refinement.requirements.apis && refinement.requirements.apis.length > 0 && (
+                                                        {refinement.requirements.apis && refinement.requirements.apis.length > 0 && (
                                                             <div className="space-y-4">
                                                                 <div>
                                                                     <Label className="text-sm font-medium mb-2 block">APIs Required:</Label>
@@ -1060,7 +1019,7 @@ export function AutonomousAgentWizard() {
                                                                 </div>
                                                             </div>
                                                         )}
-                                                        {requirementsMode === 'manual' && refinement.requirements.credentials && refinement.requirements.credentials.length > 0 && (
+                                                        {refinement.requirements.credentials && refinement.requirements.credentials.length > 0 && (
                                                             <div className="space-y-4">
                                                                 <div>
                                                                     <Label className="text-sm font-medium mb-2 block">Credentials Required:</Label>
@@ -1139,8 +1098,125 @@ export function AutonomousAgentWizard() {
                         </div>
                     )}
 
+                    {/* STEP 4.5: Credential Collection (if required) */}
+                    {step === 'credentials' && requiredCredentials.length > 0 && (
+                        <div className="scroll-mt-6">
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                            >
+                                <Card className="border-amber-500/30 shadow-lg">
+                                    <CardHeader>
+                                        <CardTitle className="text-amber-400 flex items-center gap-2">
+                                            <AlertCircle className="h-5 w-5" /> Required Credentials
+                                        </CardTitle>
+                                        <CardDescription>
+                                            The workflow requires these credentials to be configured. Please provide them to continue.
+                                        </CardDescription>
+                                    </CardHeader>
+                                    <CardContent className="space-y-4">
+                                        {requiredCredentials.map((cred, i) => {
+                                            const credKey = cred.toLowerCase().replace(/_/g, '_');
+                                            const credLabel = cred.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                                            const isPassword = cred.toLowerCase().includes('key') || 
+                                                             cred.toLowerCase().includes('token') || 
+                                                             cred.toLowerCase().includes('password') ||
+                                                             cred.toLowerCase().includes('secret');
+                                            
+                                            // Determine field type for guide
+                                            let fieldType = 'credential';
+                                            if (cred.toLowerCase().includes('webhook') && cred.toLowerCase().includes('url')) {
+                                                fieldType = 'webhook_url';
+                                            } else if (cred.toLowerCase().includes('url')) {
+                                                fieldType = 'url';
+                                            } else if (cred.toLowerCase().includes('oauth') || cred.toLowerCase().includes('client')) {
+                                                fieldType = 'oauth';
+                                            } else if (cred.toLowerCase().includes('smtp')) {
+                                                fieldType = 'smtp';
+                                            }
+                                            
+                                            return (
+                                                <div key={i} className="space-y-2">
+                                                    <Label htmlFor={`required-cred-${i}`} className="text-sm font-medium">
+                                                        {credLabel}
+                                                        <span className="text-red-400 ml-1">*</span>
+                                                    </Label>
+                                                    <Input
+                                                        id={`required-cred-${i}`}
+                                                        type={isPassword ? 'password' : 'text'}
+                                                        placeholder={`Enter ${credLabel}`}
+                                                        className="w-full"
+                                                        value={credentialValues[credKey] || credentialValues[cred] || ''}
+                                                        onChange={(e) => setCredentialValues({
+                                                            ...credentialValues,
+                                                            [credKey]: e.target.value,
+                                                            [cred]: e.target.value, // Also set with original key
+                                                        })}
+                                                    />
+                                                    <div className="flex justify-end">
+                                                        <InputGuideLink
+                                                            fieldKey={credKey}
+                                                            fieldLabel={credLabel}
+                                                            fieldType={fieldType}
+                                                            placeholder={credLabel}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                        
+                                        <div className="flex gap-3 pt-4">
+                                            <Button
+                                                onClick={async () => {
+                                                    // Validate all credentials are filled
+                                                    const allFilled = requiredCredentials.every(cred => {
+                                                        const credKey = cred.toLowerCase().replace(/_/g, '_');
+                                                        return credentialValues[credKey] || credentialValues[cred];
+                                                    });
+                                                    
+                                                    if (!allFilled) {
+                                                        toast({
+                                                            title: 'Missing Credentials',
+                                                            description: 'Please fill in all required credentials.',
+                                                            variant: 'destructive',
+                                                        });
+                                                        return;
+                                                    }
+                                                    
+                                                    // Continue building with credentials
+                                                    setShowCredentialStep(false);
+                                                    setStep('building');
+                                                    setProgress(70); // Resume from where we left off
+                                                    
+                                                    // Re-trigger build with credentials
+                                                    await handleBuild();
+                                                }}
+                                                className="flex-1"
+                                            >
+                                                <Check className="h-4 w-4 mr-2" />
+                                                Continue Building
+                                            </Button>
+                                            <Button
+                                                variant="outline"
+                                                onClick={() => {
+                                                    // Skip credentials, use environment variables
+                                                    setShowCredentialStep(false);
+                                                    setStep('building');
+                                                    setProgress(70);
+                                                    handleBuild();
+                                                }}
+                                            >
+                                                Use Environment Variables
+                                            </Button>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            </motion.div>
+                        </div>
+                    )}
+
                     {/* Ready to Build Section */}
-                    {step !== 'idle' && step !== 'analyzing' && step !== 'refining' && refinement && (
+                    {step !== 'idle' && step !== 'analyzing' && step !== 'refining' && step !== 'credentials' && refinement && (
                         <motion.div
                             initial={{ opacity: 0, y: 20 }} 
                             animate={{ opacity: 1, y: 0 }}
@@ -1152,19 +1228,11 @@ export function AutonomousAgentWizard() {
                                         <CheckCircle2 className="h-5 w-5" /> Ready to Build
                                     </h4>
                                     <p className="text-sm text-muted-foreground leading-relaxed mb-3">
-                                        The agent has all necessary information.
-                                        {requirementsMode === 'ai' ? (
-                                            <span className="block mt-2 text-indigo-300">
-                                                <Sparkles className="h-4 w-4 inline mr-1" />
-                                                AI will automatically fill all node input fields, credentials, and configuration values. The workflow will be 100% ready to run without errors.
-                                            </span>
-                                        ) : (
-                                            <span className="block mt-2">Using your provided configuration values.</span>
-                                        )}
+                                        The agent has all necessary information. Using your provided configuration values.
                                     </p>
-                                    {requirementsMode === 'ai' && refinement?.requirements && (
+                                    {refinement?.requirements && (
                                         <div className="mt-4 pt-4 border-t border-green-500/20">
-                                            <p className="text-xs font-medium text-green-300 mb-2">Auto-fill will include:</p>
+                                            <p className="text-xs font-medium text-green-300 mb-2">Requirements configured:</p>
                                             <div className="flex flex-wrap gap-2">
                                                 {refinement.requirements.urls && refinement.requirements.urls.length > 0 && (
                                                     <Badge variant="outline" className="text-xs bg-green-500/10 border-green-500/30">
