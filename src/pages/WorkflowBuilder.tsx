@@ -301,6 +301,35 @@ export default function WorkflowBuilder() {
       return;
     }
 
+    // Verify workflow exists in database before execution
+    try {
+      const { data: workflowCheck, error: checkError } = await supabase
+        .from('workflows')
+        .select('id, name, status')
+        .eq('id', finalWorkflowId)
+        .single();
+
+      if (checkError || !workflowCheck) {
+        console.error('[execute-workflow] Workflow not found in database:', checkError);
+        toast({
+          title: 'Workflow not found',
+          description: 'The workflow may not be saved yet. Please save your workflow and try again.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      console.log('[execute-workflow] Workflow verified in database:', { id: workflowCheck.id, name: workflowCheck.name });
+    } catch (verifyError) {
+      console.error('[execute-workflow] Error verifying workflow:', verifyError);
+      toast({
+        title: 'Verification error',
+        description: 'Could not verify workflow. Please try saving again.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     // CRITICAL: Prevent manual execution when schedule is active
     const { workflowScheduler } = await import('@/lib/workflowScheduler');
     if (workflowScheduler.isScheduled(finalWorkflowId)) {
@@ -397,8 +426,11 @@ export default function WorkflowBuilder() {
             });
 
             if (!response.ok) {
-              const error = await response.json().catch(() => ({ error: 'Failed to start workflow' }));
-              throw new Error(error.error || error.message || 'Failed to start workflow');
+              const errorData = await response.json().catch(() => ({ error: 'Failed to start workflow' }));
+              const errorMessage = errorData.error || errorData.message || 'Failed to start workflow';
+              const errorDetails = errorData.details ? ` Details: ${errorData.details}` : '';
+              console.error('[execute-workflow] Error response:', errorData);
+              throw new Error(`${errorMessage}${errorDetails}`);
             }
 
             toast({
@@ -464,8 +496,11 @@ export default function WorkflowBuilder() {
       });
 
       if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: 'Execution failed' }));
-        throw new Error(error.error || error.message || 'Execution failed');
+        const errorData = await response.json().catch(() => ({ error: 'Execution failed' }));
+        const errorMessage = errorData.error || errorData.message || 'Execution failed';
+        const errorDetails = errorData.details ? ` Details: ${errorData.details}` : '';
+        console.error('[execute-workflow] Error response:', errorData);
+        throw new Error(`${errorMessage}${errorDetails}`);
       }
 
       const data = await response.json();
