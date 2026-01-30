@@ -19,6 +19,7 @@ import { useWorkflowStore } from '@/stores/workflowStore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { validateAndFixWorkflow } from '@/lib/workflowValidation';
 import { useTheme } from '@/hooks/useTheme';
+import { InputGuideLink } from './InputGuideLink';
 
 type WizardStep = 'idle' | 'analyzing' | 'questioning' | 'refining' | 'confirmation' | 'building' | 'complete';
 
@@ -89,7 +90,25 @@ export function AutonomousAgentWizard() {
         }
     }, [generatedWorkflowId]);
 
-    // Auto-scroll functionality with improved reliability
+    // Immediate scroll function for instant scrolling on submit
+    const scrollImmediately = (stepRef: React.RefObject<HTMLDivElement>, fallbackScroll: number = 500) => {
+        // Try to scroll to ref first, but also scroll by amount as immediate action
+        // This ensures scrolling happens even if ref isn't ready
+        window.scrollBy({ top: fallbackScroll, behavior: 'smooth' });
+        
+        // Also try to scroll to ref if available (for more precise positioning)
+        requestAnimationFrame(() => {
+            if (stepRef.current) {
+                stepRef.current.scrollIntoView({ 
+                    behavior: 'smooth', 
+                    block: 'start', 
+                    inline: 'nearest' 
+                });
+            }
+        });
+    };
+
+    // Auto-scroll functionality with improved reliability (for delayed scrolling)
     const scrollToStep = (stepRef: React.RefObject<HTMLDivElement>, delay: number = 500) => {
         setTimeout(() => {
             if (stepRef.current) {
@@ -205,6 +224,8 @@ export function AutonomousAgentWizard() {
 
     const handleAnalyze = async () => {
         if (!prompt.trim()) return;
+        // Scroll immediately BEFORE state change - no waiting
+        scrollImmediately(step2Ref);
         setStep('analyzing');
 
         try {
@@ -227,7 +248,8 @@ export function AutonomousAgentWizard() {
             });
             setAnswers(initialAnswers);
             setStep('questioning');
-            // Auto-scroll will be handled by useEffect when step and analysis are set
+            // Ensure step 2 is visible after questions load
+            scrollToStep(step2Ref, 300);
         } catch (err: any) {
             console.error(err);
             toast({ title: 'Analysis Failed', description: err.message, variant: 'destructive' });
@@ -236,6 +258,8 @@ export function AutonomousAgentWizard() {
     };
 
     const handleRefine = async () => {
+        // Scroll immediately BEFORE state change - no waiting
+        scrollImmediately(step3Ref);
         setStep('refining');
         const fa = analysis?.questions.map(q => ({
             question: q.text,
@@ -257,7 +281,7 @@ export function AutonomousAgentWizard() {
             const data = await response.json();
             setRefinement(data);
             setStep('confirmation');
-            // Auto-scroll to step 3
+            // Ensure step 3 is visible after refinement loads
             scrollToStep(step3Ref, 300);
         } catch (err: any) {
             console.error(err);
@@ -969,6 +993,13 @@ export function AutonomousAgentWizard() {
                                                                                         [urlKey]: e.target.value
                                                                                     })}
                                                                                 />
+                                                                                <div className="flex justify-end">
+                                                                                    <InputGuideLink
+                                                                                        fieldKey={urlKey}
+                                                                                        fieldLabel={urlLabel}
+                                                                                        fieldType="url"
+                                                                                    />
+                                                                                </div>
                                                                             </div>
                                                                         );
                                                                     })}
@@ -1005,6 +1036,13 @@ export function AutonomousAgentWizard() {
                                                                                         [apiKey]: e.target.value
                                                                                     })}
                                                                                 />
+                                                                                <div className="flex justify-end">
+                                                                                    <InputGuideLink
+                                                                                        fieldKey={apiKey}
+                                                                                        fieldLabel={apiLabel}
+                                                                                        fieldType="api"
+                                                                                    />
+                                                                                </div>
                                                                             </div>
                                                                         );
                                                                     })}
@@ -1057,6 +1095,13 @@ export function AutonomousAgentWizard() {
                                                                                         [credKey]: e.target.value
                                                                                     })}
                                                                                 />
+                                                                                <div className="flex justify-end">
+                                                                                    <InputGuideLink
+                                                                                        fieldKey={credKey}
+                                                                                        fieldLabel={credLabel}
+                                                                                        fieldType={isPassword ? 'credential' : 'api_key'}
+                                                                                    />
+                                                                                </div>
                                                                             </div>
                                                                         );
                                                                     })}

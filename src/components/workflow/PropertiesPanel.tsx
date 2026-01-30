@@ -31,6 +31,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useDroppable } from '@dnd-kit/core';
 import { useExpressionDropStore } from '@/stores/expressionDropStore';
 import { resolveExpression, detectExpressionType } from '@/lib/expressionResolver';
+import { InputGuideLink } from './InputGuideLink';
 
 // Droppable field wrapper component - MUST be outside PropertiesPanel to avoid hook violations
 interface DroppableFieldWrapperProps {
@@ -1052,16 +1053,28 @@ export default function PropertiesPanel({ onClose, debugMode = false, debugInput
                                 {renderField(field)}
 
                                 {/* Last - User Manual Link at Right Side End */}
-                                {hasHelpLink && (
+                                {/* MANDATORY: Show guide link for ALL input fields (per requirements) */}
+                                {(['text', 'textarea', 'json', 'number', 'select', 'time', 'cron'].includes(field.type)) && (
                                   <div className="flex justify-end">
-                                    <button
-                                      type="button"
-                                      onClick={() => setSelectedHelp(helpInfo)}
-                                      className="text-xs text-muted-foreground/70 hover:text-foreground/80 cursor-pointer flex items-center gap-1 transition-colors duration-150"
-                                    >
-                                      <HelpCircle className="h-3 w-3" />
-                                      How to get {field.label}?
-                                    </button>
+                                    {hasHelpLink ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => setSelectedHelp(helpInfo)}
+                                        className="text-xs text-muted-foreground/70 hover:text-foreground/80 cursor-pointer flex items-center gap-1 transition-colors duration-150"
+                                      >
+                                        <HelpCircle className="h-3 w-3" />
+                                        How to get {field.label}?
+                                      </button>
+                                    ) : (
+                                      <InputGuideLink
+                                        fieldKey={field.key}
+                                        fieldLabel={field.label}
+                                        fieldType={field.type}
+                                        nodeType={selectedNode.data.type}
+                                        placeholder={field.placeholder}
+                                        helpText={field.helpText}
+                                      />
+                                    )}
                                   </div>
                                 )}
                               </div>
