@@ -2,8 +2,9 @@ import { useEffect, useState, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, Search, Zap, MoreHorizontal, Play, Trash2, Copy, Clock, History, Bot, Cpu, Workflow, MessageSquare, ChevronRight, Edit, Sparkles, Wrench, ArrowLeft } from 'lucide-react';
+import { Plus, Search, Zap, MoreHorizontal, Play, Trash2, Copy, Clock, History, Bot, Cpu, Workflow, MessageSquare, ChevronRight, Edit, Sparkles, Wrench, ArrowLeft, User } from 'lucide-react';
 import GoogleConnectionStatus from '@/components/GoogleConnectionStatus';
+import { ProfileSettingsModal } from '@/components/ProfileSettingsModal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -52,12 +53,13 @@ const detectWorkflowType = (nodes: Json): 'chatbot' | 'agent' | 'automation' => 
 };
 
 export default function Workflows() {
-  const { user, loading: authLoading, signOut } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selectedWorkflow, setSelectedWorkflow] = useState<Workflow | null>(null);
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [workflowExecutions, setWorkflowExecutions] = useState<Execution[]>([]);
   const [loadingExecutions, setLoadingExecutions] = useState(false);
   const [showCreateOptions, setShowCreateOptions] = useState(false);
@@ -300,7 +302,11 @@ export default function Workflows() {
           <div className="flex items-center gap-4">
             <GoogleConnectionStatus />
             <span className="text-sm text-muted-foreground">{user.email}</span>
-            <Button variant="outline" size="sm" onClick={() => signOut()}>Sign Out</Button>
+            <Button variant="outline" size="sm" onClick={() => setProfileModalOpen(true)}>
+              <User className="mr-2 h-4 w-4" />
+              Profile Settings
+            </Button>
+            <ProfileSettingsModal open={profileModalOpen} onOpenChange={setProfileModalOpen} />
           </div>
         </div>
       </header>
