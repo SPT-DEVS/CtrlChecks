@@ -1,18 +1,18 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
 import { ENDPOINTS } from '@/config/endpoints';
 import { 
   ArrowLeft, Clock, CheckCircle, XCircle, Loader2, 
-  RefreshCw, ChevronDown, ChevronRight 
+  RefreshCw
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { toast } from '@/hooks/use-toast';
-import { Tables, Json } from '@/integrations/supabase/types';
+import { Tables } from '@/integrations/supabase/types';
+import ExecutionLogBlock from '@/components/workflow/ExecutionLogBlock';
 
 type Execution = Tables<'executions'> & {
   workflows?: { name: string } | null;
@@ -35,7 +35,6 @@ export default function ExecutionDetail() {
   const { user, loading: authLoading } = useAuth();
   const [execution, setExecution] = useState<Execution | null>(null);
   const [loading, setLoading] = useState(true);
-  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -114,18 +113,6 @@ export default function ExecutionDetail() {
         variant: 'destructive',
       });
     }
-  };
-
-  const toggleNode = (nodeId: string) => {
-    setExpandedNodes(prev => {
-      const next = new Set(prev);
-      if (next.has(nodeId)) {
-        next.delete(nodeId);
-      } else {
-        next.add(nodeId);
-      }
-      return next;
-    });
   };
 
   const getStatusIcon = (status: string) => {
@@ -259,63 +246,25 @@ export default function ExecutionDetail() {
             {logs.length === 0 ? (
               <p className="text-muted-foreground text-center py-8">No execution logs available</p>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-0">
                 {logs.map((log, index) => (
-                  <Collapsible
-                    key={log.nodeId}
-                    open={expandedNodes.has(log.nodeId)}
-                    onOpenChange={() => toggleNode(log.nodeId)}
-                  >
-                    <CollapsibleTrigger asChild>
-                      <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted cursor-pointer transition-colors">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-muted-foreground/20 text-xs font-medium">
-                            {index + 1}
-                          </div>
-                          {getStatusIcon(log.status)}
-                          <span className="font-medium">{log.nodeName}</span>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <Badge variant="outline" className={getStatusColor(log.status)}>
-                            {log.status}
-                          </Badge>
-                          {expandedNodes.has(log.nodeId) ? (
-                            <ChevronDown className="h-4 w-4" />
-                          ) : (
-                            <ChevronRight className="h-4 w-4" />
-                          )}
-                        </div>
-                      </div>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <div className="ml-9 mt-2 space-y-3 border-l-2 border-muted pl-4 pb-2">
-                        {log.input !== undefined && (
-                          <div>
-                            <div className="text-xs font-semibold uppercase text-muted-foreground mb-1">Input</div>
-                            <pre className="text-xs bg-muted p-2 rounded overflow-x-auto max-h-40">
-                              {JSON.stringify(log.input, null, 2)}
-                            </pre>
-                          </div>
-                        )}
-                        {log.output !== undefined && (
-                          <div>
-                            <div className="text-xs font-semibold uppercase text-muted-foreground mb-1">Output</div>
-                            <pre className="text-xs bg-muted p-2 rounded overflow-x-auto max-h-40">
-                              {JSON.stringify(log.output, null, 2)}
-                            </pre>
-                          </div>
-                        )}
-                        {log.error && (
-                          <div>
-                            <div className="text-xs font-semibold uppercase text-destructive mb-1">Error</div>
-                            <pre className="text-xs bg-destructive/10 text-destructive p-2 rounded">
-                              {log.error}
-                            </pre>
-                          </div>
-                        )}
-                      </div>
-                    </CollapsibleContent>
-                  </Collapsible>
+                  <ExecutionLogBlock
+                    key={log.nodeId || index}
+                    log={{
+                      nodeId: log.nodeId || `node-${index}`,
+                      nodeName: log.nodeName || log.nodeId || `Node ${index + 1}`,
+                      nodeType: (log as any).nodeType,
+                      status: log.status || 'unknown',
+                      startedAt: log.startedAt || new Date().toISOString(),
+                      finishedAt: log.finishedAt,
+                      input: log.input,
+                      output: log.output,
+                      error: log.error,
+                    }}
+                    index={index}
+                    totalNodes={logs.length}
+                    isLast={index === logs.length - 1}
+                  />
                 ))}
               </div>
             )}

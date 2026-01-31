@@ -1,0 +1,243 @@
+/**
+ * Real-time Execution Visualizer Styles
+ * Enhanced animations and visual effects for workflow execution
+ */
+
+/* Node Status Animations */
+@keyframes pulse-running {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.02);
+    opacity: 0.9;
+  }
+}
+
+@keyframes pulse-error {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+  }
+}
+
+@keyframes glow-pulse {
+  0%, 100% {
+    box-shadow: 0 0 5px rgba(59, 130, 246, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.8);
+  }
+}
+
+/* Workflow Node Styles */
+.workflow-node {
+  position: relative;
+  border: 3px solid;
+  border-radius: 10px;
+  padding: 15px;
+  margin: 20px;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  background: white;
+}
+
+.workflow-node.node-status-idle {
+  border-color: #9ca3af;
+  background: white;
+}
+
+.workflow-node.node-status-pending {
+  border-color: #9ca3af;
+  background: linear-gradient(135deg, #f3f4f620 0%, transparent 100%);
+}
+
+.workflow-node.node-status-running {
+  border-color: #3b82f6;
+  background: linear-gradient(135deg, #3b82f620 0%, transparent 100%);
+  animation: pulse-running 1.5s infinite;
+  box-shadow: 0 0 15px rgba(59, 130, 246, 0.3);
+}
+
+.workflow-node.node-status-success {
+  border-color: #10b981;
+  background: linear-gradient(135deg, #10b98120 0%, transparent 100%);
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.2);
+}
+
+.workflow-node.node-status-error {
+  border-color: #ef4444;
+  background: linear-gradient(135deg, #ef444420 0%, transparent 100%);
+  animation: pulse-error 2s infinite;
+  box-shadow: 0 0 15px rgba(239, 68, 68, 0.3);
+}
+
+.workflow-node.node-status-skipped {
+  border-color: #f59e0b;
+  background: linear-gradient(135deg, #f59e0b20 0%, transparent 100%);
+}
+
+/* Connection Lines with Animation */
+.connection-line {
+  stroke-dasharray: 10;
+  animation: flow-animation 1s linear infinite;
+  stroke-linecap: round;
+  transition: stroke 0.3s ease;
+}
+
+.connection-line.active {
+  stroke: #22c55e;
+  stroke-width: 3;
+  animation: flow-animation 0.5s linear infinite;
+}
+
+.connection-line.pending {
+  stroke: #9ca3af;
+  stroke-width: 2;
+}
+
+.connection-line.error {
+  stroke: #ef4444;
+  stroke-width: 2;
+}
+
+@keyframes flow-animation {
+  0% {
+    stroke-dashoffset: 20;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Execution Timeline */
+.execution-timeline {
+  position: relative;
+  padding: 20px 0;
+}
+
+.execution-timeline-item {
+  position: relative;
+  padding-left: 30px;
+  margin-bottom: 20px;
+}
+
+.execution-timeline-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid;
+  background: white;
+}
+
+.execution-timeline-item.success::before {
+  border-color: #10b981;
+  background: #10b981;
+}
+
+.execution-timeline-item.error::before {
+  border-color: #ef4444;
+  background: #ef4444;
+}
+
+.execution-timeline-item.running::before {
+  border-color: #3b82f6;
+  background: #3b82f6;
+  animation: pulse-running 1.5s infinite;
+}
+
+.execution-timeline-item::after {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 12px;
+  width: 2px;
+  height: calc(100% + 8px);
+  background: #e5e7eb;
+}
+
+.execution-timeline-item:last-child::after {
+  display: none;
+}
+
+/* Progress Indicators */
+.progress-indicator {
+  position: relative;
+  overflow: hidden;
+}
+
+.progress-indicator::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.3),
+    transparent
+  );
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    left: -100%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+/* Badge Styles */
+.execution-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.execution-badge.success {
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+}
+
+.execution-badge.error {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+.execution-badge.running {
+  background: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+}
+
+/* Dark Mode Support */
+.dark .workflow-node {
+  background: #1f2937;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+}
+
+.dark .workflow-node.node-status-running {
+  background: linear-gradient(135deg, #3b82f630 0%, transparent 100%);
+}
+
+.dark .workflow-node.node-status-success {
+  background: linear-gradient(135deg, #10b98130 0%, transparent 100%);
+}
+
+.dark .workflow-node.node-status-error {
+  background: linear-gradient(135deg, #ef444430 0%, transparent 100%);
+}
