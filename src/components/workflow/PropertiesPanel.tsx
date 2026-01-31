@@ -614,6 +614,27 @@ export default function PropertiesPanel({ onClose, debugMode = false, debugInput
   };
 
 
+  // Get operation-specific helpText for Instagram node
+  const getInstagramOperationHelpText = (operation: string): string => {
+    const operationGuides: Record<string, string> = {
+      'create_image_post': 'How to get Operation:\n1) Select "Create Image Post" from the dropdown menu\n2) This operation publishes a single image to your Instagram Business account feed\n3) Required fields: Access Token, Instagram Business Account ID, and Image URL\n4) Optional field: Caption (text with hashtags, mentions, and emojis - up to 2,200 characters)\n5) Image requirements: Must be HTTPS URL, JPG or PNG format, minimum 320px width, maximum 1080px width\n6) Upload your image to a public hosting service (AWS S3, Cloudinary, etc.) and copy the direct URL\n7) After successful posting, you will receive a Media ID in the response for tracking and management\n8) The post will be published to your connected Instagram Business account feed',
+      
+      'create_video_post': 'How to get Operation:\n1) Select "Create Video Post (Reels)" from the dropdown menu\n2) This operation publishes a video or Reel to your Instagram Business account\n3) Required fields: Access Token, Instagram Business Account ID, and Video URL\n4) Optional field: Caption (text with hashtags, mentions, and emojis - up to 2,200 characters)\n5) Video requirements: Must be HTTPS URL, MP4 format, maximum 100MB file size\n6) For Reels: Video must be 3-60 seconds in duration\n7) Upload your video to a public hosting service and copy the direct URL\n8) After successful posting, you will receive a Media ID in the response for tracking',
+      
+      'create_carousel_post': 'How to get Operation:\n1) Select "Create Carousel Post" from the dropdown menu\n2) This operation publishes multiple images in a swipeable carousel format\n3) Required fields: Access Token, Instagram Business Account ID, and Carousel Image URLs (JSON array)\n4) Optional field: Caption (text with hashtags, mentions, and emojis - up to 2,200 characters)\n5) Image requirements: 2-10 images, all must have the same aspect ratio, HTTPS URLs, JPG or PNG format\n6) Format: JSON array like ["https://example.com/img1.jpg", "https://example.com/img2.jpg"]\n7) Upload all images to public hosting and create a JSON array of the URLs\n8) After successful posting, you will receive a Media ID in the response for tracking',
+      
+      'get_media': 'How to get Operation:\n1) Select "Get Media" from the dropdown menu\n2) This operation retrieves a list of media posts from your Instagram Business account\n3) Required fields: Access Token and Instagram Business Account ID\n4) Optional field: Limit (maximum 100 items, default is 25)\n5) The operation returns an array of media objects with IDs, captions, timestamps, and permalinks\n6) Use this to list all your posts, get Media IDs for other operations, or track your content\n7) Each media object includes: id, caption, timestamp, permalink, media_type, and thumbnail_url\n8) Use the returned Media IDs for operations like Get Comments or Get Insights',
+      
+      'get_comments': 'How to get Operation:\n1) Select "Get Comments" from the dropdown menu\n2) This operation retrieves comments from a specific media post on your Instagram account\n3) Required fields: Access Token, Instagram Business Account ID, and Media ID\n4) Optional field: Limit (maximum 100 items, default is 25)\n5) Get the Media ID from a previous "Get Media" operation or from the API response when creating a post\n6) The operation returns an array of comment objects with IDs, text, timestamps, and user information\n7) Each comment includes: id, text, timestamp, username, and reply_count\n8) Use the returned Comment IDs for operations like Reply to Comment',
+      
+      'reply_comment': 'How to get Operation:\n1) Select "Reply to Comment" from the dropdown menu\n2) This operation replies to a specific comment on one of your media posts\n3) Required fields: Access Token, Instagram Business Account ID, Comment ID, and Comment Text\n4) Get the Comment ID from a previous "Get Comments" operation\n5) Comment Text: Write your reply message (supports text, hashtags, mentions, and emojis)\n6) The reply will appear as a response to the original comment on your Instagram post\n7) After successful reply, you will receive a reply comment ID in the response\n8) Use this to engage with your audience and respond to comments on your posts',
+      
+      'get_insights': 'How to get Operation:\n1) Select "Get Insights" from the dropdown menu\n2) This operation retrieves analytics data for a specific media post on your Instagram account\n3) Required fields: Access Token, Instagram Business Account ID, Media ID, and Insight Metric\n4) Get the Media ID from a previous "Get Media" operation or from the API response when creating a post\n5) Select Insight Metric: Reach (unique accounts reached), Impressions (total views), or Engagement (likes, comments, saves)\n6) The operation returns insight data with metrics, values, and breakdowns\n7) Use this to track performance, analyze engagement, and measure post success\n8) Insights help you understand how your content is performing and optimize your strategy'
+    };
+    
+    return operationGuides[operation] || operationGuides['create_image_post'];
+  };
+
   // Parse helpText to extract title and steps
   const parseHelpText = (helpText: string): { title: string; steps: string[] } | null => {
     if (!helpText || !helpText.startsWith('How to get')) {
@@ -1055,9 +1076,16 @@ export default function PropertiesPanel({ onClose, debugMode = false, debugInput
                             Configuration
                           </h3>
                           {nodeDefinition.configFields.map((field) => {
-                            const helpInfo = field.helpText ? parseHelpText(field.helpText) : null;
+                            // Get dynamic helpText for Instagram operation field
+                            let effectiveHelpText = field.helpText;
+                            if (selectedNode.data.type === 'instagram' && field.key === 'operation') {
+                              const operationValue = (selectedNode.data.config || {})[field.key] ?? field.defaultValue ?? 'create_image_post';
+                              effectiveHelpText = getInstagramOperationHelpText(String(operationValue));
+                            }
+                            
+                            const helpInfo = effectiveHelpText ? parseHelpText(effectiveHelpText) : null;
                             const hasHelpLink = helpInfo !== null;
-                            const hasDescription = field.helpText && !hasHelpLink;
+                            const hasDescription = effectiveHelpText && !hasHelpLink;
 
                             return (
                               <div key={field.key} className="space-y-2">
@@ -1069,7 +1097,7 @@ export default function PropertiesPanel({ onClose, debugMode = false, debugInput
 
                                 {/* Next - Description (if exists and not a help link) */}
                                 {hasDescription && (
-                                  <p className="text-xs text-muted-foreground/70 leading-relaxed">{field.helpText}</p>
+                                  <p className="text-xs text-muted-foreground/70 leading-relaxed">{effectiveHelpText}</p>
                                 )}
 
                                 {/* Next - Input Field */}
@@ -1095,7 +1123,7 @@ export default function PropertiesPanel({ onClose, debugMode = false, debugInput
                                         fieldType={field.type}
                                         nodeType={selectedNode.data.type}
                                         placeholder={field.placeholder}
-                                        helpText={field.helpText}
+                                        helpText={effectiveHelpText}
                                       />
                                     )}
                                   </div>
