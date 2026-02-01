@@ -85,6 +85,16 @@ export function AutonomousAgentWizard() {
     const step3Ref = useRef<HTMLDivElement>(null);
     const step4Ref = useRef<HTMLDivElement>(null);
 
+    // Debug: Log when requiredCredentials changes
+    useEffect(() => {
+        console.log('🔑 [Frontend] requiredCredentials state changed:', requiredCredentials);
+        console.log('📊 [Frontend] Current step:', step);
+        console.log('📋 [Frontend] Has refinement:', !!refinement);
+        if (step === 'confirmation' && refinement) {
+            console.log('✅ [Frontend] Should show credentials step:', requiredCredentials.length > 0);
+        }
+    }, [requiredCredentials, step, refinement]);
+    
     // Debug: Log when workflow ID is set
     useEffect(() => {
         if (generatedWorkflowId) {
@@ -261,6 +271,122 @@ export function AutonomousAgentWizard() {
         }
     };
 
+    // Identify required credentials from requirements and answers
+    const identifyRequiredCredentials = (requirements: any, answers: Record<string, string>): string[] => {
+        const credentials: string[] = [];
+        
+        // Extract selected services from answers
+        const answerValues = Object.values(answers).map(v => String(v).toLowerCase());
+        const answerTexts = Object.values(answers).join(' ').toLowerCase();
+        const promptText = prompt.toLowerCase();
+        
+        console.log('🔍 [Frontend] Identifying credentials:', { 
+            promptText: promptText.substring(0, 100), 
+            answerValues, 
+            answerTexts: answerTexts.substring(0, 200) 
+        });
+        
+        // Check if AI Agent/LLM functionality is needed
+        // Check both prompt and answers for AI-related keywords
+        const hasAIFunctionality = 
+            promptText.includes('ai agent') ||
+            promptText.includes('ai assistant') ||
+            promptText.includes('chatbot') ||
+            promptText.includes('chat bot') ||
+            promptText.includes('llm') ||
+            promptText.includes('language model') ||
+            promptText.includes('generate') ||
+            promptText.includes('analyze') ||
+            promptText.includes('summarize') ||
+            promptText.includes('classify') ||
+            promptText.includes('sentiment') ||
+            promptText.includes('intent') ||
+            promptText.includes('natural language') ||
+            promptText.includes('nlp') ||
+            promptText.includes('text analysis') ||
+            promptText.includes('content generation') ||
+            promptText.includes('ai-powered') ||
+            promptText.includes('ai powered') ||
+            promptText.includes('using ai') ||
+            promptText.includes('with ai') ||
+            promptText.includes('ai model') ||
+            answerTexts.includes('ai agent') ||
+            answerTexts.includes('ai assistant') ||
+            answerTexts.includes('chatbot') ||
+            answerTexts.includes('ai-generated') ||
+            answerTexts.includes('ai generated') ||
+            answerTexts.includes('ai-generated content') ||
+            answerTexts.includes('ai content') ||
+            answerValues.some(v => v.includes('ai-generated') || v.includes('ai generated'));
+        
+        console.log('🤖 [Frontend] AI Functionality detected:', hasAIFunctionality);
+        
+        // Check for AI providers in answers
+        if (answerValues.some(v => v.includes('openai') || v.includes('gpt'))) {
+            credentials.push('OPENAI_API_KEY');
+            console.log('✅ [Frontend] Added OPENAI_API_KEY');
+        } else if (answerValues.some(v => v.includes('claude') || v.includes('anthropic'))) {
+            credentials.push('ANTHROPIC_API_KEY');
+            console.log('✅ [Frontend] Added ANTHROPIC_API_KEY');
+        } else if (answerValues.some(v => v.includes('gemini') || v.includes('google'))) {
+            credentials.push('GEMINI_API_KEY');
+            console.log('✅ [Frontend] Added GEMINI_API_KEY (from provider selection)');
+        } else if (hasAIFunctionality) {
+            // If AI functionality is detected but no specific provider selected, default to Gemini
+            credentials.push('GEMINI_API_KEY');
+            console.log('✅ [Frontend] Added GEMINI_API_KEY (default for AI functionality)');
+        }
+        
+        // Check for output channels
+        if (answerValues.some(v => v.includes('slack'))) {
+            credentials.push('SLACK_TOKEN', 'SLACK_WEBHOOK_URL');
+        } else if (answerValues.some(v => v.includes('discord'))) {
+            credentials.push('DISCORD_WEBHOOK_URL');
+        } else if (answerValues.some(v => v.includes('email') || v.includes('smtp'))) {
+            credentials.push('SMTP_HOST', 'SMTP_USERNAME', 'SMTP_PASSWORD');
+        }
+        
+        // Check for Google services
+        if (answerValues.some(v => v.includes('google')) || 
+            (requirements.platforms && requirements.platforms.some((p: any) => 
+                typeof p === 'string' ? p.toLowerCase().includes('google') : 
+                (p.name || p.type || '').toLowerCase().includes('google')
+            ))) {
+            if (!credentials.includes('GEMINI_API_KEY')) {
+                credentials.push('GEMINI_API_KEY');
+            }
+        }
+        
+        // Check requirements for credential hints
+        if (requirements.credentials && Array.isArray(requirements.credentials)) {
+            requirements.credentials.forEach((cred: any) => {
+                const credName = typeof cred === 'string' ? cred : (cred.name || cred.type || '');
+                if (credName && !credentials.includes(credName.toUpperCase())) {
+                    credentials.push(credName.toUpperCase());
+                }
+            });
+        }
+        
+        // Check APIs for credential requirements
+        if (requirements.apis && Array.isArray(requirements.apis)) {
+            requirements.apis.forEach((api: any) => {
+                const apiName = typeof api === 'string' ? api : (api.name || api.endpoint || '');
+                const apiLower = apiName.toLowerCase();
+                if (apiLower.includes('openai') || apiLower.includes('gpt')) {
+                    if (!credentials.includes('OPENAI_API_KEY')) credentials.push('OPENAI_API_KEY');
+                } else if (apiLower.includes('claude') || apiLower.includes('anthropic')) {
+                    if (!credentials.includes('ANTHROPIC_API_KEY')) credentials.push('ANTHROPIC_API_KEY');
+                } else if (apiLower.includes('gemini') || apiLower.includes('google')) {
+                    if (!credentials.includes('GEMINI_API_KEY')) credentials.push('GEMINI_API_KEY');
+                }
+            });
+        }
+        
+        const finalCredentials = [...new Set(credentials)]; // Remove duplicates
+        console.log('🎯 [Frontend] Final identified credentials:', finalCredentials);
+        return finalCredentials;
+    };
+
     const handleRefine = async () => {
         // Scroll immediately BEFORE state change - no waiting
         scrollImmediately(step3Ref);
@@ -284,6 +410,27 @@ export function AutonomousAgentWizard() {
 
             const data = await response.json();
             setRefinement(data);
+            
+            // Identify required credentials from requirements and answers
+            // Use credentials from backend if provided, otherwise identify from requirements
+            let detectedCredentials: string[] = [];
+            
+            if (data.requiredCredentials && Array.isArray(data.requiredCredentials) && data.requiredCredentials.length > 0) {
+                // Backend has already identified credentials
+                detectedCredentials = data.requiredCredentials;
+                console.log('🔑 Backend identified required credentials:', detectedCredentials);
+            } else if (data.requirements) {
+                // Fallback: identify from requirements (frontend detection)
+                detectedCredentials = identifyRequiredCredentials(data.requirements, answers);
+                console.log('🔑 Frontend identified required credentials:', detectedCredentials);
+                console.log('📋 Requirements:', data.requirements);
+                console.log('💬 Answers:', answers);
+            }
+            
+            // Always set credentials (even if empty array)
+            setRequiredCredentials(detectedCredentials);
+            console.log('✅ Set requiredCredentials to:', detectedCredentials);
+            
             setStep('confirmation');
             // Ensure step 3 is visible after refinement loads
             scrollToStep(step3Ref, 300);
@@ -328,10 +475,24 @@ export function AutonomousAgentWizard() {
         };
 
         try {
+            // Normalize credential values to ensure uppercase keys are included
+            const normalizedCredentials: Record<string, string> = {};
+            Object.entries(credentialValues).forEach(([key, value]) => {
+                // Keep original key
+                normalizedCredentials[key] = value;
+                // Also add uppercase version if it's a credential key
+                if (requiredCredentials.some(cred => cred === key || key.toLowerCase() === cred.toLowerCase())) {
+                    const upperKey = key.toUpperCase();
+                    if (!normalizedCredentials[upperKey]) {
+                        normalizedCredentials[upperKey] = value;
+                    }
+                }
+            });
+            
             // Build config with requirement values, credentials, and requirements metadata for AI auto-fill
             const config = {
                 ...requirementValues,
-                ...credentialValues, // Include collected credentials
+                ...normalizedCredentials, // Include collected credentials with normalized keys
                 ollamaBaseUrl: ENDPOINTS.itemBackend,
                 // Pass requirements metadata so backend can intelligently fill fields
                 requirements: refinement?.requirements || {},
@@ -888,217 +1049,116 @@ export function AutonomousAgentWizard() {
                         </div>
                     )}
 
-                    {/* STEP 4: Credentials & Requirements */}
-                    {step !== 'idle' && step !== 'analyzing' && refinement && refinement.requirements && (
+                    {/* STEP 4: Required Credentials */}
+                    {step === 'confirmation' && refinement && requiredCredentials.length > 0 && (
                         <div ref={step4Ref} className="scroll-mt-6">
                             <motion.div
-                                initial={{ opacity: 0, y: 20 }} 
+                                initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
                             >
-                                <Card className="border-amber-500/20 shadow-lg">
+                                <Card className="border-amber-500/30 shadow-lg">
                                     <CardHeader>
                                         <CardTitle className="text-amber-400 flex items-center gap-2">
-                                            <Settings2 className="h-5 w-5" /> Credentials & Requirements
+                                            <AlertCircle className="h-5 w-5" /> Required Credentials
                                         </CardTitle>
-                                        <CardDescription>URLs, APIs, credentials, and other requirements</CardDescription>
+                                        <CardDescription>
+                                            The workflow requires these credentials to be configured. Please provide them to continue building your workflow.
+                                        </CardDescription>
                                     </CardHeader>
-                                            <CardContent className="space-y-6">
-                                                {Array.isArray(refinement.requirements) ? (
-                                                    // Legacy format - array of requirement objects
-                                                    <div className="grid gap-4 animate-in fade-in slide-in-from-bottom-2">
-                                                        {refinement.requirements.map((req: any) => (
-                                                            <div key={req.key} className="gap-2 grid">
-                                                                <Label>{req.label}</Label>
-                                                                <Input
-                                                                    placeholder={req.description}
-                                                                    className="h-10"
-                                                                    value={requirementValues[req.key] || ''}
-                                                                    onChange={(e) => setRequirementValues({ ...requirementValues, [req.key]: e.target.value })}
-                                                                />
-                                                            </div>
-                                                        ))}
+                                    <CardContent className="space-y-4">
+                                        {requiredCredentials.map((cred, i) => {
+                                            const credKey = cred.toLowerCase().replace(/_/g, '_');
+                                            const credLabel = cred.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                                            const isPassword = cred.toLowerCase().includes('key') || 
+                                                             cred.toLowerCase().includes('token') || 
+                                                             cred.toLowerCase().includes('password') ||
+                                                             cred.toLowerCase().includes('secret');
+                                            
+                                            // Determine field type for guide
+                                            let fieldType = 'credential';
+                                            if (cred.toLowerCase().includes('webhook') && cred.toLowerCase().includes('url')) {
+                                                fieldType = 'webhook_url';
+                                            } else if (cred.toLowerCase().includes('url')) {
+                                                fieldType = 'url';
+                                            } else if (cred.toLowerCase().includes('oauth') || cred.toLowerCase().includes('client')) {
+                                                fieldType = 'oauth';
+                                            } else if (cred.toLowerCase().includes('smtp')) {
+                                                fieldType = 'smtp';
+                                            }
+                                            
+                                            return (
+                                                <div key={i} className="space-y-2">
+                                                    <Label htmlFor={`required-cred-${i}`} className="text-sm font-medium">
+                                                        {credLabel}
+                                                        <span className="text-red-400 ml-1">*</span>
+                                                    </Label>
+                                                    <Input
+                                                        id={`required-cred-${i}`}
+                                                        type={isPassword ? 'password' : 'text'}
+                                                        placeholder={`Enter ${credLabel}`}
+                                                        className="w-full"
+                                                        value={credentialValues[credKey] || credentialValues[cred] || ''}
+                                                        onChange={(e) => setCredentialValues({
+                                                            ...credentialValues,
+                                                            [credKey]: e.target.value,
+                                                            [cred]: e.target.value, // Also set with original key
+                                                        })}
+                                                    />
+                                                    <div className="flex justify-end">
+                                                        <InputGuideLink
+                                                            fieldKey={credKey}
+                                                            fieldLabel={credLabel}
+                                                            fieldType={fieldType}
+                                                            placeholder={credLabel}
+                                                        />
                                                     </div>
-                                                ) : (
-                                                    // New format - object with arrays
-                                                    <div className="space-y-6">
-
-                                                        {refinement.requirements.urls && refinement.requirements.urls.length > 0 && (
-                                                            <div className="space-y-4">
-                                                                <div>
-                                                                    <Label className="text-sm font-medium mb-2 block">URLs Required:</Label>
-                                                                    <p className="text-xs text-muted-foreground mb-3">
-                                                                        What URLs does your workflow need to connect to? Enter the base URLs or endpoints required.
-                                                                    </p>
-                                                                </div>
-                                                                <div className="space-y-3">
-                                                                    {refinement.requirements.urls.map((url: any, i: number) => {
-                                                                        const urlKey = typeof url === 'string' ? `url_${i}` : url?.key || `url_${i}`;
-                                                                        const urlLabel = typeof url === 'string' ? url : url?.name || url?.url || `URL ${i + 1}`;
-                                                                        const urlPlaceholder = typeof url === 'string' ? `Enter ${url}` : url?.placeholder || `https://example.com`;
-                                                                        
-                                                                        return (
-                                                                            <div key={i} className="space-y-2">
-                                                                                <Label htmlFor={`url-${i}`} className="text-sm font-medium">
-                                                                                    {urlLabel}
-                                                                                </Label>
-                                                                                <Input
-                                                                                    id={`url-${i}`}
-                                                                                    type="url"
-                                                                                    placeholder={urlPlaceholder}
-                                                                                    className="w-full"
-                                                                                    value={requirementValues[urlKey] || ''}
-                                                                                    onChange={(e) => setRequirementValues({
-                                                                                        ...requirementValues,
-                                                                                        [urlKey]: e.target.value
-                                                                                    })}
-                                                                                />
-                                                                                <div className="flex justify-end">
-                                                                                    <InputGuideLink
-                                                                                        fieldKey={urlKey}
-                                                                                        fieldLabel={urlLabel}
-                                                                                        fieldType="url"
-                                                                                    />
-                                                                                </div>
-                                                                            </div>
-                                                                        );
-                                                                    })}
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                        {refinement.requirements.apis && refinement.requirements.apis.length > 0 && (
-                                                            <div className="space-y-4">
-                                                                <div>
-                                                                    <Label className="text-sm font-medium mb-2 block">APIs Required:</Label>
-                                                                    <p className="text-xs text-muted-foreground mb-3">
-                                                                        What APIs does your workflow need? Enter API endpoints, base URLs, or API keys required to build and run the workflow.
-                                                                    </p>
-                                                                </div>
-                                                                <div className="space-y-3">
-                                                                    {refinement.requirements.apis.map((api: any, i: number) => {
-                                                                        const apiKey = typeof api === 'string' ? `api_${i}` : api?.key || `api_${i}`;
-                                                                        const apiLabel = typeof api === 'string' ? api : api?.name || api?.endpoint || `API ${i + 1}`;
-                                                                        const apiPlaceholder = typeof api === 'string' ? `Enter ${api} endpoint or key` : api?.placeholder || `API endpoint or key`;
-                                                                        
-                                                                        return (
-                                                                            <div key={i} className="space-y-2">
-                                                                                <Label htmlFor={`api-${i}`} className="text-sm font-medium">
-                                                                                    {apiLabel}
-                                                                                </Label>
-                                                                                <Input
-                                                                                    id={`api-${i}`}
-                                                                                    type="text"
-                                                                                    placeholder={apiPlaceholder}
-                                                                                    className="w-full"
-                                                                                    value={requirementValues[apiKey] || ''}
-                                                                                    onChange={(e) => setRequirementValues({
-                                                                                        ...requirementValues,
-                                                                                        [apiKey]: e.target.value
-                                                                                    })}
-                                                                                />
-                                                                                <div className="flex justify-end">
-                                                                                    <InputGuideLink
-                                                                                        fieldKey={apiKey}
-                                                                                        fieldLabel={apiLabel}
-                                                                                        fieldType="api"
-                                                                                    />
-                                                                                </div>
-                                                                            </div>
-                                                                        );
-                                                                    })}
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                        {refinement.requirements.platforms && refinement.requirements.platforms.length > 0 && (
-                                                            <div>
-                                                                <Label className="text-sm font-medium mb-2 block">Platforms Required:</Label>
-                                                                <div className="flex flex-wrap gap-2">
-                                                                    {refinement.requirements.platforms.map((platform: any, i: number) => {
-                                                                        const platformText = typeof platform === 'string' ? platform : platform?.name || platform?.type || String(platform);
-                                                                        return <Badge key={i} variant="outline" className="text-xs">{platformText}</Badge>;
-                                                                    })}
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                        {refinement.requirements.credentials && refinement.requirements.credentials.length > 0 && (
-                                                            <div className="space-y-4">
-                                                                <div>
-                                                                    <Label className="text-sm font-medium mb-2 block">Credentials Required:</Label>
-                                                                    <p className="text-xs text-muted-foreground mb-3">
-                                                                        What credentials does your workflow need? Enter API keys, tokens, passwords, or other authentication details required to build and run the workflow automatically.
-                                                                    </p>
-                                                                </div>
-                                                                <div className="space-y-3">
-                                                                    {refinement.requirements.credentials.map((cred: any, i: number) => {
-                                                                        const credKey = typeof cred === 'string' ? cred : cred?.name || cred?.type || `credential_${i}`;
-                                                                        const credLabel = typeof cred === 'string' ? cred : cred?.name || cred?.type || `Credential ${i + 1}`;
-                                                                        const credDescription = typeof cred === 'object' ? cred?.description : '';
-                                                                        const credType = typeof cred === 'object' && cred?.type ? cred.type : 'text';
-                                                                        const isPassword = credType === 'password' || credLabel.toLowerCase().includes('password') || credLabel.toLowerCase().includes('token') || credLabel.toLowerCase().includes('key');
-                                                                        
-                                                                        return (
-                                                                            <div key={i} className="space-y-2">
-                                                                                <Label htmlFor={`cred-${i}`} className="text-sm font-medium">
-                                                                                    {credLabel}
-                                                                                    {credDescription && (
-                                                                                        <span className="text-xs text-muted-foreground ml-2 font-normal">({credDescription})</span>
-                                                                                    )}
-                                                                                </Label>
-                                                                                <Input
-                                                                                    id={`cred-${i}`}
-                                                                                    type={isPassword ? 'password' : 'text'}
-                                                                                    placeholder={`Enter ${credLabel.toLowerCase()}`}
-                                                                                    className="w-full"
-                                                                                    value={requirementValues[credKey] || ''}
-                                                                                    onChange={(e) => setRequirementValues({
-                                                                                        ...requirementValues,
-                                                                                        [credKey]: e.target.value
-                                                                                    })}
-                                                                                />
-                                                                                <div className="flex justify-end">
-                                                                                    <InputGuideLink
-                                                                                        fieldKey={credKey}
-                                                                                        fieldLabel={credLabel}
-                                                                                        fieldType={isPassword ? 'credential' : 'api_key'}
-                                                                                    />
-                                                                                </div>
-                                                                            </div>
-                                                                        );
-                                                                    })}
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                        {refinement.requirements.schedules && refinement.requirements.schedules.length > 0 && (
-                                                            <div>
-                                                                <Label className="text-sm font-medium mb-2 block">Schedules:</Label>
-                                                                <div className="flex flex-wrap gap-2">
-                                                                    {refinement.requirements.schedules.map((schedule: any, i: number) => {
-                                                                        // Handle both string and object formats
-                                                                        const scheduleText = typeof schedule === 'string' 
-                                                                            ? schedule 
-                                                                            : schedule?.name || schedule?.frequency || JSON.stringify(schedule);
-                                                                        return (
-                                                                            <Badge key={i} variant="outline" className="text-xs">{scheduleText}</Badge>
-                                                                        );
-                                                                    })}
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                        {(!refinement.requirements.urls || refinement.requirements.urls.length === 0) &&
-                                                         (!refinement.requirements.apis || refinement.requirements.apis.length === 0) &&
-                                                         (!refinement.requirements.platforms || refinement.requirements.platforms.length === 0) &&
-                                                         (!refinement.requirements.credentials || refinement.requirements.credentials.length === 0) &&
-                                                         (!refinement.requirements.schedules || refinement.requirements.schedules.length === 0) && (
-                                                            <p className="text-sm text-muted-foreground">No specific requirements detected. AI will use intelligent defaults.</p>
-                                                        )}
-                                                    </div>
-                                                )}
-                                            </CardContent>
-                                        </Card>
+                                                </div>
+                                            );
+                                        })}
+                                        
+                                        <div className="flex gap-3 pt-4">
+                                            <Button
+                                                onClick={async () => {
+                                                    // Validate all credentials are filled
+                                                    const allFilled = requiredCredentials.every(cred => {
+                                                        const credKey = cred.toLowerCase().replace(/_/g, '_');
+                                                        return credentialValues[credKey] || credentialValues[cred];
+                                                    });
+                                                    
+                                                    if (!allFilled) {
+                                                        toast({
+                                                            title: 'Missing Credentials',
+                                                            description: 'Please fill in all required credentials.',
+                                                            variant: 'destructive',
+                                                        });
+                                                        return;
+                                                    }
+                                                    
+                                                    // Start building workflow
+                                                    await handleBuild();
+                                                }}
+                                                className="flex-1"
+                                            >
+                                                <Check className="h-4 w-4 mr-2" />
+                                                Start Building Workflow
+                                            </Button>
+                                            <Button
+                                                variant="outline"
+                                                onClick={async () => {
+                                                    // Skip credentials, use environment variables
+                                                    await handleBuild();
+                                                }}
+                                            >
+                                                Use Environment Variables
+                                            </Button>
+                                        </div>
+                                    </CardContent>
+                                </Card>
                             </motion.div>
                         </div>
                     )}
 
-                    {/* STEP 4.5: Credential Collection (if required) */}
+                    {/* STEP 4.5: Credential Collection (if required during building) */}
                     {step === 'credentials' && requiredCredentials.length > 0 && (
                         <div className="scroll-mt-6">
                             <motion.div
@@ -1183,27 +1243,19 @@ export function AutonomousAgentWizard() {
                                                         return;
                                                     }
                                                     
-                                                    // Continue building with credentials
-                                                    setShowCredentialStep(false);
-                                                    setStep('building');
-                                                    setProgress(70); // Resume from where we left off
-                                                    
-                                                    // Re-trigger build with credentials
+                                                    // Start building workflow with credentials
                                                     await handleBuild();
                                                 }}
                                                 className="flex-1"
                                             >
                                                 <Check className="h-4 w-4 mr-2" />
-                                                Continue Building
+                                                Start Building Workflow
                                             </Button>
                                             <Button
                                                 variant="outline"
-                                                onClick={() => {
+                                                onClick={async () => {
                                                     // Skip credentials, use environment variables
-                                                    setShowCredentialStep(false);
-                                                    setStep('building');
-                                                    setProgress(70);
-                                                    handleBuild();
+                                                    await handleBuild();
                                                 }}
                                             >
                                                 Use Environment Variables
@@ -1215,8 +1267,8 @@ export function AutonomousAgentWizard() {
                         </div>
                     )}
 
-                    {/* Ready to Build Section */}
-                    {step !== 'idle' && step !== 'analyzing' && step !== 'refining' && step !== 'credentials' && refinement && (
+                    {/* Ready to Build Section - Only show when no credentials needed or all provided */}
+                    {step === 'confirmation' && refinement && requiredCredentials.length === 0 && (
                         <motion.div
                             initial={{ opacity: 0, y: 20 }} 
                             animate={{ opacity: 1, y: 0 }}
@@ -1228,38 +1280,11 @@ export function AutonomousAgentWizard() {
                                         <CheckCircle2 className="h-5 w-5" /> Ready to Build
                                     </h4>
                                     <p className="text-sm text-muted-foreground leading-relaxed mb-3">
-                                        The agent has all necessary information. Using your provided configuration values.
+                                        The agent has all necessary information to build your workflow.
                                     </p>
-                                    {refinement?.requirements && (
-                                        <div className="mt-4 pt-4 border-t border-green-500/20">
-                                            <p className="text-xs font-medium text-green-300 mb-2">Requirements configured:</p>
-                                            <div className="flex flex-wrap gap-2">
-                                                {refinement.requirements.urls && refinement.requirements.urls.length > 0 && (
-                                                    <Badge variant="outline" className="text-xs bg-green-500/10 border-green-500/30">
-                                                        {refinement.requirements.urls.length} URL{refinement.requirements.urls.length > 1 ? 's' : ''}
-                                                    </Badge>
-                                                )}
-                                                {refinement.requirements.apis && refinement.requirements.apis.length > 0 && (
-                                                    <Badge variant="outline" className="text-xs bg-green-500/10 border-green-500/30">
-                                                        {refinement.requirements.apis.length} API{refinement.requirements.apis.length > 1 ? 's' : ''}
-                                                    </Badge>
-                                                )}
-                                                {refinement.requirements.credentials && refinement.requirements.credentials.length > 0 && (
-                                                    <Badge variant="outline" className="text-xs bg-green-500/10 border-green-500/30">
-                                                        {refinement.requirements.credentials.length} Credential{refinement.requirements.credentials.length > 1 ? 's' : ''}
-                                                    </Badge>
-                                                )}
-                                                {refinement.requirements.schedules && refinement.requirements.schedules.length > 0 && (
-                                                    <Badge variant="outline" className="text-xs bg-green-500/10 border-green-500/30">
-                                                        {refinement.requirements.schedules.length} Schedule{refinement.requirements.schedules.length > 1 ? 's' : ''}
-                                                    </Badge>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
                                 </div>
                                 <Button onClick={handleBuild} className="w-full h-14 text-lg font-semibold bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 shadow-xl shadow-indigo-500/25 transition-all hover:scale-[1.02]">
-                                    <Play className="mr-2 h-5 w-5 fill-current" /> Start Building
+                                    <Play className="mr-2 h-5 w-5 fill-current" /> Start Building Workflow
                                 </Button>
                             </div>
                         </motion.div>
