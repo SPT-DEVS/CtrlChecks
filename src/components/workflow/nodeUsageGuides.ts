@@ -40,8 +40,8 @@ Output: {
   },
 
   webhook: {
-    overview: 'Receives HTTP requests from external services. Use this to trigger workflows from other apps, APIs, or services. Parses headers, query parameters, and JSON body safely.',
-    inputs: ['HTTP request body', 'Headers', 'Query params'],
+    overview: 'Starts a workflow when an external system sends an HTTP request to your webhook URL. Captures headers, query parameters, and body data.',
+    inputs: ['HTTP method (GET/POST/PUT)', 'Incoming request data'],
     outputs: ['trigger', 'method', 'headers', 'query', 'body'],
     example: `Webhook URL: https://your-app.com/api/webhook/abc123
 
@@ -58,27 +58,49 @@ Output: {
   query: {},
   body: {"event": "order_created", "data": {...}}
 }`,
-    tips: ['Copy the webhook URL after saving', 'Supports GET, POST, PUT methods', 'Headers and query params are available in output', 'JSON body is parsed safely'],
+    tips: [
+      'Enable the webhook URL in Webhook settings',
+      'Supports GET, POST, PUT methods',
+      'Headers and query params are available in output',
+      'JSON body is parsed safely when possible',
+    ],
   },
 
   chat_trigger: {
-    overview: 'Triggers workflow from chat / AI / UI messages. Perfect for chatbot integrations and AI assistants. Requires message and session_id.',
-    inputs: ['message (required)', 'session_id (required)', 'user_context (optional)'],
-    outputs: ['trigger', 'message', 'session_id', 'user_context'],
+    overview: 'Starting node that activates when a user sends a chat message. It captures the message and context (user, session, channel, timestamp) so the workflow can respond or take action.',
+    inputs: [
+      'message (text content)',
+      'session_id or conversation_id',
+      'user_id / sender_id',
+      'user_context (optional metadata)',
+      'channel or source (optional)',
+    ],
+    outputs: ['trigger', 'message', 'session_id', 'user_id', 'timestamp', 'channel', 'metadata'],
     example: `Chat Input:
 {
-  "message": "Hello, how can I help?",
-  "session_id": "session_123",
-  "user_context": {"name": "John", "role": "user"}
+  "message": "I want to track my order",
+  "session_id": "session_20260201_001",
+  "user_id": "user_839204",
+  "channel": "Web Chat",
+  "metadata": {"device": "Mobile"}
 }
 
 Output: {
   trigger: "chat",
-  message: "Hello, how can I help?",
-  session_id: "session_123",
-  user_context: {"name": "John", "role": "user"}
+  message: "I want to track my order",
+  session_id: "session_20260201_001",
+  user_id: "user_839204",
+  channel: "Web Chat",
+  timestamp: "2026-02-01T10:45:32Z",
+  metadata: {"device": "Mobile"}
 }`,
-    tips: ['message cannot be empty', 'session_id is required', 'user_context is optional and normalized to object', 'Perfect for chatbot integrations'],
+    tips: [
+      'Use as the first node in the workflow',
+      'Store session_id for multi-step conversations',
+      'Add rate limits to prevent spam triggers',
+      'Keep trigger conditions simple',
+      'Handle empty or very short messages gracefully',
+    ],
   },
 
   error_trigger: {
@@ -133,7 +155,7 @@ Workflow B receives:
   // AI Processing
   openai_gpt: {
     overview: 'Processes text using OpenAI GPT models. Provide a system prompt and the input will be sent as the user message.',
-    inputs: ['text', 'any JSON data'],
+    inputs: ['apiKey', 'model', 'prompt', 'temperature', 'memory'],
     outputs: ['response', 'usage', 'model'],
     example: `System Prompt: "You are a helpful assistant that summarizes emails."
 
@@ -160,7 +182,7 @@ Output: {
 
   google_gemini: {
     overview: 'Processes text using Google Gemini models. Fast and efficient with strong reasoning capabilities.',
-    inputs: ['text', 'any JSON data'],
+    inputs: ['apiKey', 'model', 'prompt', 'temperature', 'memory'],
     outputs: ['response', 'usage', 'model'],
     example: `System Prompt: "Extract key dates and action items from text."
 
@@ -204,7 +226,7 @@ Connect: Webhook → Sentiment → If/Else (route by sentiment)`,
   // Logic & Control
   if_else: {
     overview: 'Routes workflow based on conditions. Creates two branches: one for when condition is true, another for false.',
-    inputs: ['any data to evaluate'],
+    inputs: ['condition'],
     outputs: ['true_branch', 'false_branch'],
     example: `Condition: {{input.score}} > 0.5
 
@@ -218,7 +240,7 @@ Connect FALSE → Send Followup Email`,
 
   switch: {
     overview: 'Routes to different branches based on matching values. Like multiple if/else statements combined.',
-    inputs: ['value to match'],
+    inputs: ['expression', 'cases'],
     outputs: ['matched_case', 'default'],
     example: `Expression: {{input.status}}
 Cases: [
@@ -293,7 +315,7 @@ Output: [John, Bob] (filtered out Jane)`,
 
   merge: {
     overview: 'Combines data from multiple input branches into a single output. Supports different merge modes: merge objects, append arrays, key-based merge, wait for all, or concatenate arrays.',
-    inputs: ['multiple data inputs from different branches'],
+    inputs: ['mode', 'mergeKey', 'multiple data inputs from different branches'],
     outputs: ['merged_data'],
     example: `Mode: Merge Objects
 Input 1: {name: "John", age: 30}
@@ -648,8 +670,8 @@ Output: {
 
   respond_to_webhook: {
     overview: 'Send HTTP response back to webhook caller. Use this at the end of webhook-triggered workflows to return data or status to the caller.',
-    inputs: ['response data'],
-    outputs: ['sent response'],
+    inputs: ['statusCode', 'responseBody', 'headers'],
+    outputs: ['status', 'response'],
     example: `Status Code: 200
 Headers: {"Content-Type": "application/json"}
 Body: {"status": "success", "data": "{{input}}"}
@@ -676,7 +698,7 @@ Useful for storing computed values to use in multiple places.`,
 
   google_sheets: {
     overview: 'Read or write data from Google Sheets. Connect your spreadsheets to workflows for data analysis, validation, and automation.',
-    inputs: ['spreadsheet_id', 'range', 'data (for write operations)'],
+    inputs: ['operation', 'spreadsheetId', 'sheetName', 'range', 'outputFormat', 'readDirection', 'allowWrite', 'data'],
     outputs: ['data', 'rows', 'columns', 'formatted_data'],
     example: `Operation: Read
 Spreadsheet ID: 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms
@@ -725,14 +747,18 @@ Output: [
   // Output Actions
   http_post: {
     overview: 'Send data to external APIs via HTTP POST. Perfect for webhooks, API integrations, and data sync.',
-    inputs: ['data to send'],
+    inputs: ['url', 'headers', 'bodyTemplate'],
     outputs: ['response', 'status'],
     example: `URL: https://api.example.com/webhook
 Headers: {"Content-Type": "application/json"}
-Body: {"event": "workflow_complete", "data": "{{input}}"}
+Body Template: {"event": "workflow_complete", "data": {{input}}}
 
 Sends POST request with workflow data.`,
-    tips: ['Use body template for dynamic content', 'Add auth headers if needed', 'Check response for errors'],
+    tips: [
+      'Use body template for dynamic content',
+      'Add auth headers (Bearer/API key) if needed',
+      'Set Content-Type to match your body',
+    ],
   },
 
   email_resend: {
@@ -746,6 +772,21 @@ Body: "<h1>Thank you!</h1><p>Order {{input.orderId}} confirmed.</p>"
 
 Sends personalized order confirmation.`,
     tips: ['Requires RESEND_API_KEY secret', 'Use HTML for rich emails', 'Use {{input.x}} for personalization'],
+  },
+  email: {
+    overview: 'Send emails via SMTP. Use for notifications, alerts, and reports.',
+    inputs: ['to', 'subject', 'text', 'html (optional)'],
+    outputs: ['status', 'message_id'],
+    example: `To: user@example.com
+Subject: "Order Confirmed"
+Text: "Thanks for your purchase!"
+
+Sends a notification email.`,
+    tips: [
+      'SMTP settings are configured in system settings',
+      'Use text for plain emails, HTML for rich formatting',
+      'Validate recipient addresses before sending',
+    ],
   },
 
   slack_message: {
@@ -763,14 +804,18 @@ Sends formatted alert to Slack channel.`,
 
   discord_webhook: {
     overview: 'Send messages to Discord channels via webhook. Great for notifications and alerts.',
-    inputs: ['message content'],
+    inputs: ['webhookUrl', 'content', 'username (optional)', 'avatarUrl (optional)'],
     outputs: ['message_id'],
     example: `Webhook URL: https://discord.com/api/webhooks/...
 Message: "✅ Workflow completed successfully!"
 Username: "Alert Bot"
 
 Sends message to Discord channel.`,
-    tips: ['Create webhook in Discord channel settings', 'Customize username and avatar', 'Supports markdown formatting'],
+    tips: [
+      'Create webhook in Discord channel settings',
+      'Customize username and avatar per message',
+      'Supports markdown formatting',
+    ],
   },
 
   database_write: {
@@ -902,8 +947,8 @@ Output: HMAC signature`,
 
   slack_webhook: {
     overview: 'Simple Slack webhook for quick messages. Less features than Slack Message but easier to set up.',
-    inputs: ['message text'],
-    outputs: ['status'],
+    inputs: ['webhookUrl', 'text'],
+    outputs: ['status', 'response'],
     example: `Webhook URL: https://hooks.slack.com/services/...
 Text: "Workflow completed at {{input.timestamp}}"
 
@@ -1448,14 +1493,14 @@ Output: {
   // MISSING TRIGGER NODES
   // ============================================
   form: {
-    overview: 'Creates a web form that users can submit to trigger your workflow. Supports multiple field types (text, email, number, select, file, etc.). Generates a unique form URL that can be shared. Perfect for contact forms, surveys, registrations, or data collection.',
+    overview: 'Creates a user-friendly form that collects structured data and starts your workflow on submission. Supports text, numbers, email, files, selections, and confirmations. Perfect for lead capture, surveys, applications, or support requests.',
     inputs: ['None - Triggered by form submission'],
     outputs: ['trigger', 'form_id', 'submission_data', 'form_fields', 'submitted_at', 'user_id (if authenticated)'],
     example: `Form Fields:
-- Name (text, required)
-- Email (email, required)
-- Message (textarea, optional)
-- Category (select: Support, Sales, General)
+- Name (Text, Required)
+- Email (Email, Required)
+- Message (Textarea, Optional)
+- Category (Dropdown: Support, Sales, General)
 
 User submits form with:
 {
@@ -1474,18 +1519,18 @@ Output: {
     "message": "Need help with order",
     "category": "Support"
   },
-  submitted_at: "2024-01-15T10:30:00Z"
+  submitted_at: "2026-02-01T10:30:00Z"
 }
 
-Connect form → Process submission → Send email notification`,
+Connect: Form → Validate → Notify Team`,
     tips: [
-      'Copy the Form URL after saving to share with users',
-      'Form fields are configured in the node settings',
-      'Enable CAPTCHA to prevent spam',
-      'Use authentication requirement for user tracking',
-      'Set redirect URL to thank users after submission',
-      'Form URL is unique per workflow',
-      'Multiple submissions allowed by default (can disable)',
+      'Use clear field labels and short descriptions',
+      'Keep forms concise to improve completion rates',
+      'Use validation rules to prevent bad data',
+      'Enable CAPTCHA if you expect spam',
+      'Require authentication only when necessary',
+      'Review submissions during testing before sharing the form URL',
+      'Use meaningful field keys for downstream mapping',
     ],
   },
 
@@ -2705,11 +2750,15 @@ Output: {
   // STORAGE & DOCUMENT PROCESSING NODES
   // ============================================
   resume_parser: {
-    overview: 'Extract structured data from resume/CV files (PDF, DOCX, images). Parses contact information, skills, work experience, education, and certifications. Normalizes skills to standard formats and calculates total experience. Perfect for recruitment, applicant tracking, or skill matching.',
-    inputs: ['file', 'normalizeSkills', 'experienceCalculation'],
+    overview: 'Parses resume/CV files into structured candidate data like name, contact info, skills, education, and experience. Ideal for recruitment, applicant tracking, and automated screening.',
+    inputs: [
+      'file (resume document)',
+      'normalizeSkills (standardize skill names)',
+      'experienceCalculation (total years)',
+    ],
     outputs: ['contactInfo', 'skills', 'experience', 'education', 'totalExperience'],
     example: `File: {
-  "name": "resume.pdf",
+  "name": "candidate_resume.pdf",
   "type": "pdf",
   "binary": "base64_encoded_pdf..."
 }
@@ -2727,19 +2776,18 @@ Output: {
     {
       company: "Tech Corp",
       position: "Senior Developer",
-      duration: "2 years",
-      description: "Led development team..."
+      duration: "2 years"
     }
   ],
   education: [...],
   totalExperience: 5.5
 }`,
     tips: [
-      'Supports PDF, DOCX, and image formats',
-      'Normalize skills to standard format names',
-      'Calculates total years of experience automatically',
-      'Extracts structured data from unstructured resumes',
-      'Use for ATS (Applicant Tracking System) integration',
+      'Use clean, text-based resumes when possible',
+      'Enable OCR upstream if the resume is scanned',
+      'Normalize skills for consistent matching',
+      'Verify parsed data before automation decisions',
+      'Great for ATS and candidate ranking workflows',
     ],
   },
 
@@ -2988,8 +3036,8 @@ Output: {
   // CRM NODES
   // ============================================
   hubspot: {
-    overview: 'Interact with HubSpot CRM to manage contacts, companies, deals, tickets, and other CRM objects. Supports CRUD operations, search, and batch processing. Perfect for sales automation, marketing automation, or customer relationship management.',
-    inputs: ['authType', 'apiKey', 'accessToken', 'resource', 'operation', 'id', 'properties', 'searchQuery', 'limit'],
+    overview: 'Connects to HubSpot CRM to create, update, retrieve, delete, or search contacts, companies, deals, tickets, and other objects. Perfect for automating sales, marketing, and support workflows.',
+    inputs: ['authType', 'apiKey', 'accessToken', 'resource', 'operation', 'id', 'properties', 'searchQuery', 'limit', 'after'],
     outputs: ['result', 'records', 'paging'],
     example: `Resource: contact
 Operation: create
@@ -3010,17 +3058,60 @@ Output: {
   }
 }`,
     tips: [
-      'Use API Key for simple integrations',
-      'Use OAuth2 Access Token for secure integrations',
-      'Resources: contact, company, deal, ticket, product, etc.',
-      'Batch operations for processing multiple records',
-      'Search operation uses HubSpot search syntax',
+      'Use Private App access tokens when possible',
+      'Choose the correct resource (contact, company, deal, ticket)',
+      'Search before create to avoid duplicates',
+      'Use pagination (after) for large datasets',
+      'Respect HubSpot API rate limits',
+    ],
+  },
+  bitbucket: {
+    overview: 'Automates Bitbucket tasks like managing repositories, branches, commits, pull requests, comments, and pipelines. Great for DevOps workflows, approvals, and repository automation.',
+    inputs: [
+      'username',
+      'appPassword',
+      'operation',
+      'workspace',
+      'repo',
+      'title',
+      'description',
+      'sourceBranch',
+      'destinationBranch',
+      'prId',
+      'comment',
+      'mergeStrategy',
+      'branchName',
+      'targetBranch',
+      'commitSha',
+      'pipelineUuid',
+    ],
+    outputs: ['result', 'records', 'paging'],
+    example: `Operation: create_pr
+Workspace: my-team
+Repository: backend-api
+Title: "Add login feature"
+Source Branch: feature/login
+Destination Branch: main
+
+Output: {
+  result: {
+    id: 42,
+    title: "Add login feature",
+    state: "OPEN"
+  }
+}`,
+    tips: [
+      'Use App Passwords, not your login password',
+      'Verify workspace and repo names from the URL',
+      'Use Search/Get before Update or Merge',
+      'Use PRs for changes instead of direct merges',
+      'Respect API rate limits for large repos',
     ],
   },
 
   salesforce: {
     overview: 'Interact with Salesforce CRM using SOQL queries, SOSL search, or CRUD operations. Supports standard objects (Account, Contact, Lead, Opportunity) and custom objects. Perfect for enterprise CRM automation, sales pipeline management, or Salesforce data integration.',
-    inputs: ['instanceUrl', 'accessToken', 'resource', 'operation', 'soql', 'sosl', 'id', 'fields', 'externalIdField', 'externalIdValue'],
+    inputs: ['instanceUrl', 'accessToken', 'resource', 'customObject', 'operation', 'soql', 'sosl', 'id', 'fields', 'externalIdField', 'externalIdValue'],
     outputs: ['records', 'result', 'totalSize'],
     example: `Resource: Contact
 Operation: query
@@ -3047,7 +3138,7 @@ Output: {
 
   zoho_crm: {
     overview: 'Interact with Zoho CRM to manage leads, contacts, accounts, deals, and other CRM modules. Supports CRUD operations, search, and bulk processing. Perfect for small to medium business CRM automation or Zoho ecosystem integration.',
-    inputs: ['accessToken', 'module', 'operation', 'id', 'data', 'criteria', 'limit'],
+    inputs: ['accessToken', 'apiDomain', 'module', 'customModule', 'operation', 'id', 'data', 'criteria', 'fields', 'page', 'perPage'],
     outputs: ['result', 'data', 'info'],
     example: `Module: Contacts
 Operation: create
@@ -3541,8 +3632,8 @@ Output: {
   },
 
   docker: {
-    overview: 'Interact with Docker daemon to manage containers and images. Supports listing, building, tagging, pushing, pulling images, and managing containers. Perfect for Docker automation, CI/CD pipelines, or container management.',
-    inputs: ['host', 'port', 'operation', 'containerId', 'imageName', 'dockerfilePath', 'buildContext', 'tag', 'registry', 'registryUsername', 'registryPassword'],
+    overview: 'Connects to Docker to manage containers and images. Supports listing, building, tagging, pulling, pushing, and container lifecycle actions. Ideal for DevOps automation and repeatable environments.',
+    inputs: ['host', 'port', 'operation', 'containerId', 'imageName', 'dockerfilePath', 'buildContext', 'tag', 'sourceTag', 'registry', 'registryUsername', 'registryPassword'],
     outputs: ['result', 'containers', 'images', 'logs'],
     example: `Operation: list_containers
 Host: localhost
@@ -3559,16 +3650,16 @@ Output: {
   ]
 }`,
     tips: [
-      'Host: localhost or Unix socket path (unix:///var/run/docker.sock)',
-      'Port: 2375 (TCP) or 2376 (TLS)',
-      'Supports containers and images management',
-      'Build images from Dockerfile',
-      'Push/pull images from registries',
+      'Host can be a local socket or TCP host',
+      'Port 2375 = TCP, 2376 = TLS',
+      'Use container name or ID for container actions',
+      'Build image uses Dockerfile path + context',
+      'Push/Pull require registry credentials if private',
     ],
   },
 
   kubernetes: {
-    overview: 'Interact with Kubernetes API to manage pods, deployments, services, and namespaces. Supports comprehensive Kubernetes operations including scaling, restarting, and log retrieval. Perfect for Kubernetes automation, CI/CD, or cluster management.',
+    overview: 'Connects to a Kubernetes cluster to list, deploy, scale, restart, and inspect workloads. Ideal for CI/CD automation and cluster management.',
     inputs: ['apiServer', 'token', 'namespace', 'operation', 'resourceName', 'deploymentManifest', 'replicas'],
     outputs: ['result', 'pods', 'deployments', 'services', 'logs'],
     example: `Operation: list_pods
@@ -3586,16 +3677,16 @@ Output: {
   ]
 }`,
     tips: [
-      'Get API Server URL from kubeconfig or kubectl cluster-info',
-      'Get token from kubeconfig or service account',
+      'Use kubeconfig or service account token',
       'Namespace defaults to "default"',
-      'Supports pods, deployments, services management',
-      'Use for Kubernetes automation and orchestration',
+      'Use list operations to confirm resource names',
+      'Scale and restart apply to deployments',
+      'Validate manifests before creating resources',
     ],
   },
 
   jenkins: {
-    overview: 'Interact with Jenkins API to manage jobs, builds, and pipelines. Supports triggering builds, getting build status, and managing jobs. Perfect for CI/CD automation or Jenkins integration.',
+    overview: 'Connects to Jenkins to trigger jobs, monitor builds, fetch build logs, and automate CI/CD steps. Ideal for deployment pipelines and build notifications.',
     inputs: ['baseUrl', 'username', 'token', 'jobName', 'operation', 'parameters'],
     outputs: ['result', 'jobs', 'builds', 'buildStatus'],
     example: `Operation: trigger_build
@@ -3610,39 +3701,37 @@ Output: {
   }
 }`,
     tips: [
-      'Base URL: your Jenkins server URL',
-      'Get token from Jenkins → Configure → API Token',
-      'Supports job management and build triggering',
-      'Use for CI/CD automation',
-      'Parameters passed as JSON object',
+      'Use API token instead of password',
+      'Base URL must include https:// or http://',
+      'Use parameterized jobs for dynamic values',
+      'Polling is useful for long-running builds',
+      'Limit permissions to required jobs',
     ],
   },
 
   pagerduty: {
-    overview: 'Interact with PagerDuty API to manage incidents, alerts, and on-call schedules. Supports creating incidents, acknowledging/resolving incidents, and managing on-call rotations. Perfect for incident management automation or alert integration.',
-    inputs: ['apiKey', 'operation', 'incidentId', 'data'],
+    overview: 'Creates and manages PagerDuty incidents, acknowledgments, resolutions, and on-call lookups. Ideal for alert automation and incident response workflows.',
+    inputs: ['apiKey', 'operation', 'incidentId', 'title', 'serviceId', 'urgency', 'status', 'escalationPolicyId', 'assigneeId', 'note', 'scheduleId'],
     outputs: ['result', 'incidents', 'onCallSchedules'],
     example: `Operation: create_incident
 API Key: your-api-key
-Data: {
-  "title": "Service Down",
-  "service": {"id": "service_id"},
-  "urgency": "high"
-}
+Service ID: PABC123
+Title: "Service Down"
+Urgency: high
 
 Output: {
   result: {
-    id: "incident_id",
+    id: "QWER456",
     title: "Service Down",
     status: "triggered"
   }
 }`,
     tips: [
-      'Get API key from PagerDuty → Configuration → API → API Access Keys',
-      'Supports incident management and on-call schedules',
-      'Use for alert automation and incident response',
-      'Integrate with monitoring tools',
-      'Create incidents, acknowledge, resolve automatically',
+      'Use API token with incident permissions',
+      'Service ID is required for Create Incident',
+      'Incident ID is required for acknowledge/resolve',
+      'Use notes to add context to updates',
+      'List schedules or on-calls for routing',
     ],
   },
 
@@ -4870,27 +4959,38 @@ Output: {
   },
 
   fraud_detection_node: {
-    overview: 'AI-powered fraud detection system that analyzes transactions, user behavior, or events to identify fraudulent activity. Uses machine learning patterns and rule-based checks. Perfect for payment security, transaction monitoring, or fraud prevention.',
-    inputs: ['transaction', 'userHistory', 'patterns', 'riskThreshold'],
+    overview: 'Analyzes transaction or user activity data to identify potentially fraudulent behavior. Evaluates factors like amount, location, device, frequency, and user history to produce a fraud risk score or decision.',
+    inputs: [
+      'transaction (id, amount, currency, merchant, location, timestamp)',
+      'historicalPatterns (averageAmount, commonMerchants, commonLocations)',
+      'riskThreshold (0–1, default 0.7)',
+    ],
     outputs: ['fraudulent', 'riskScore', 'indicators'],
     example: `Transaction: {
-  "amount": 10000,
-  "location": "unusual_country",
-  "time": "midnight"
+  "id": "txn_98456321",
+  "amount": 15000,
+  "currency": "INR",
+  "merchant": "Unknown",
+  "location": "Different country",
+  "timestamp": "2026-02-01T14:32:00Z"
 }
-Risk Threshold: 0.7
+Historical Patterns: {
+  "averageAmount": 800,
+  "commonLocations": ["India"]
+}
+Risk Threshold: 0.6
 
 Output: {
   fraudulent: true,
-  riskScore: 0.85,
-  indicators: ["unusual_location", "high_amount", "odd_time"]
+  riskScore: 0.82,
+  indicators: ["location_mismatch", "high_amount"]
 }`,
     tips: [
-      'Detects fraudulent transactions',
-      'Analyzes user behavior patterns',
-      'Risk score indicates fraud likelihood',
-      'Use for payment security',
-      'Identifies fraud indicators',
+      'Always include amount and user/transaction IDs',
+      'Add location, device, and history data for better accuracy',
+      'Start with a medium threshold and tune over time',
+      'Combine rule-based checks with ML scoring when possible',
+      'Review flagged cases and refine rules regularly',
     ],
   },
 
@@ -4969,28 +5069,18 @@ Output: {
   },
 
   microsoft_teams: {
-    overview: 'Interact with Microsoft Teams API to send messages, create channels, manage members, and access team data. Supports chat, channels, and team management. Perfect for Teams automation or collaboration workflows.',
-    inputs: ['accessToken', 'teamId', 'channelId', 'operation', 'data'],
-    outputs: ['result', 'messages', 'channels'],
-    example: `Operation: send_message
-Channel ID: channel123
-Data: {
-  "content": "Hello from CtrlChecks!"
-}
+    overview: 'Send messages to Microsoft Teams channels via Incoming Webhook. Great for notifications and alerts.',
+    inputs: ['webhookUrl', 'title (optional)', 'message'],
+    outputs: ['status'],
+    example: `Webhook URL: https://outlook.office.com/webhook/...
+Title: "Workflow Notification"
+Message: "Your workflow completed successfully!"
 
-Output: {
-  result: {
-    id: "message_id",
-    content: "Hello from CtrlChecks!",
-    createdDateTime: "2024-01-15T10:30:00Z"
-  }
-}`,
+Sends message to Microsoft Teams channel.`,
     tips: [
-      'Get access token from Azure AD app registration',
-      'Team ID and Channel ID required',
-      'Supports messages, channels, members',
-      'Use for Teams automation',
-      'Microsoft Graph API integration',
+      'Create webhook in Teams channel connectors',
+      'Use for alerts and notifications',
+      'Keep messages short and clear',
     ],
   },
 
