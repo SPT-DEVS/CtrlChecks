@@ -309,57 +309,6 @@ export default function ExecutionConsole({ isExpanded, onToggle }: ExecutionCons
       }
 
       return (
-<<<<<<< HEAD
-        <div className="space-y-4">
-          {logs.map((log: any, i: number) => {
-            if (typeof log !== 'object' || log === null) {
-              return (
-                <div key={i} className="p-3 rounded-md bg-muted/50 border border-border">
-                  <div className="text-xs font-mono text-muted-foreground">
-                    [{i + 1}] {JSON.stringify(log, null, 2)}
-                  </div>
-                </div>
-              );
-            }
-
-            // Get node name from log, or look it up from workflow store using nodeId
-            // Handle both undefined and empty string cases
-            let nodeName = log.nodeName?.trim() || null;
-            if (!nodeName && log.nodeId) {
-              const nodeFromStore = nodes.find((n: any) => n.id === log.nodeId);
-              if (nodeFromStore) {
-                nodeName = nodeFromStore.data?.label?.trim() || 
-                          nodeFromStore.data?.type || 
-                          null;
-              }
-            }
-            // Final fallback - use nodeId or generate a name
-            if (!nodeName) {
-              if (log.nodeId) {
-                // Try to extract a meaningful name from nodeId if it follows a pattern
-                const nodeIdStr = String(log.nodeId);
-                // If nodeId looks like it contains a type (e.g., "openai_gpt_123"), extract it
-                const typeMatch = nodeIdStr.match(/([a-z_]+)/i);
-                if (typeMatch && typeMatch[1] && typeMatch[1].length > 3) {
-                  nodeName = typeMatch[1].replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                } else {
-                  nodeName = nodeIdStr;
-                }
-              } else {
-                nodeName = `Node ${i + 1}`;
-              }
-            }
-            const status = log.status || 'unknown';
-            const statusColor = 
-              status === 'success' ? 'text-green-500 border-green-500/20 bg-green-500/5' :
-              status === 'failed' ? 'text-red-500 border-red-500/20 bg-red-500/5' :
-              status === 'running' ? 'text-blue-500 border-blue-500/20 bg-blue-500/5' :
-              'text-muted-foreground border-border bg-muted/30';
-
-            const duration = log.startedAt && log.finishedAt
-              ? new Date(log.finishedAt).getTime() - new Date(log.startedAt).getTime()
-              : null;
-
         <div className="space-y-0">
           {validLogs.map((log: any, i: number) => (
             <ExecutionLogBlock
