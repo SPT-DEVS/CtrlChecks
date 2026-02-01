@@ -82,6 +82,173 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
         'sk-proj-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
       ],
       example: 'sk-proj-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+    },
+    model: {
+      title: 'How to choose Model?',
+      steps: [
+        'Select the OpenAI model that matches your task.',
+        '',
+        'Options:',
+        '• gpt-4o – most capable',
+        '• gpt-4o-mini – faster, lower cost',
+        '• gpt-4-turbo – strong general performance'
+      ],
+      example: 'gpt-4o'
+    },
+    prompt: {
+      title: 'How to write System Prompt?',
+      steps: [
+        'System Prompt defines the AI’s role and behavior.',
+        '',
+        'Example:',
+        'You are a helpful assistant that summarizes text clearly.',
+        '',
+        'Tip: Be explicit about format and tone.'
+      ],
+      example: 'You are a helpful assistant that summarizes text clearly.'
+    },
+    temperature: {
+      title: 'How to set Temperature?',
+      steps: [
+        'Temperature controls creativity vs. determinism.',
+        '',
+        'Guidelines:',
+        '• 0.0–0.3 for factual tasks',
+        '• 0.7 for balanced output',
+        '• 1.0+ for creative tasks'
+      ],
+      example: '0.7'
+    },
+    memory: {
+      title: 'How to set Memory?',
+      steps: [
+        'Memory is the number of conversation turns remembered.',
+        '',
+        'Set higher values for longer context, lower for short tasks.'
+      ],
+      example: '10'
+    }
+  },
+  ollama: {
+    serverUrl: {
+      title: 'How to set Ollama Server URL?',
+      steps: [
+        'This is the base URL of your Ollama server.',
+        '',
+        'Common value:',
+        '• http://localhost:11434',
+        '',
+        'Tip: Make sure the server is running and reachable.'
+      ],
+      example: 'http://localhost:11434'
+    },
+    model: {
+      title: 'How to choose Model?',
+      steps: [
+        'Choose a model installed on your Ollama server.',
+        '',
+        'Examples:',
+        '• llama3.1:8b',
+        '• qwen2.5-coder:7b',
+        '',
+        'Tip: Pull models on the server first (e.g., ollama pull llama3.1:8b).'
+      ],
+      example: 'llama3.1:8b'
+    },
+    prompt: {
+      title: 'How to write Prompt?',
+      steps: [
+        'Prompt is the instruction sent to the model.',
+        '',
+        'Example:',
+        'Summarize the text in 3 bullet points.',
+        '',
+        'Tip: Be clear and specific.'
+      ],
+      example: 'Summarize the text in 3 bullet points.'
+    },
+    temperature: {
+      title: 'How to set Temperature?',
+      steps: [
+        'Temperature controls creativity vs. determinism.',
+        '',
+        'Guidelines:',
+        '• 0.0–0.3 for factual tasks',
+        '• 0.7 for balanced output',
+        '• 1.0+ for creative tasks'
+      ],
+      example: '0.7'
+    }
+  },
+  google_gemini: {
+    apiKey: {
+      title: 'Google Gemini API Key – Step-by-Step',
+      url: 'https://aistudio.google.com/apikey',
+      steps: [
+        '1️⃣ Open Google AI Studio',
+        '   Go to 👉 https://aistudio.google.com/apikey',
+        '   Sign in with your Google account',
+        '',
+        '2️⃣ Create API Key',
+        '   Click "Create API Key"',
+        '   Select or create a Google Cloud project',
+        '',
+        '3️⃣ Copy API Key',
+        '   Copy the key immediately',
+        '   It starts with "AIza"',
+        '',
+        '4️⃣ Paste the Key',
+        '   Paste it into the API Key field above',
+        '',
+        'Example:',
+        'AIzaSyDxxxxxxxxxxxxxxxxxxxxx'
+      ],
+      example: 'AIzaSyDxxxxxxxxxxxxxxxxxxxxx'
+    },
+    model: {
+      title: 'How to choose Model?',
+      steps: [
+        'Select the Gemini model that fits your task.',
+        '',
+        'Options:',
+        '• gemini-2.5-pro – most capable',
+        '• gemini-2.5-flash – balanced',
+        '• gemini-2.5-flash-lite – fastest/cheapest'
+      ],
+      example: 'gemini-2.5-flash'
+    },
+    prompt: {
+      title: 'How to write System Prompt?',
+      steps: [
+        'System Prompt defines the AI’s role and behavior.',
+        '',
+        'Example:',
+        'You are a helpful assistant that summarizes text clearly.',
+        '',
+        'Tip: Be explicit about format and tone.'
+      ],
+      example: 'You are a helpful assistant that summarizes text clearly.'
+    },
+    temperature: {
+      title: 'How to set Temperature?',
+      steps: [
+        'Temperature controls creativity vs. determinism.',
+        '',
+        'Guidelines:',
+        '• 0.0–0.3 for factual tasks',
+        '• 0.7 for balanced output',
+        '• 1.0+ for creative tasks'
+      ],
+      example: '0.7'
+    },
+    memory: {
+      title: 'How to set Memory?',
+      steps: [
+        'Memory is the number of conversation turns remembered.',
+        '',
+        'Set higher values for longer context, lower for short tasks.'
+      ],
+      example: '10'
     }
   },
   anthropic_claude: {
@@ -799,6 +966,21 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
     }
   },
   google_sheets: {
+    operation: {
+      title: 'How to choose Operation?',
+      steps: [
+        'Operation defines what you want to do in Google Sheets.',
+        '',
+        'Options:',
+        '• Read – retrieve data',
+        '• Write – replace data in a range',
+        '• Append – add new rows',
+        '• Update – modify existing cells',
+        '',
+        'Choose based on whether you are reading or writing.'
+      ],
+      example: 'read'
+    },
     spreadsheetId: {
       title: 'Google Sheets ID – Step-by-Step',
       steps: [
@@ -828,6 +1010,72 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
         '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms'
       ],
       example: '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms'
+    },
+    sheetName: {
+      title: 'How to set Sheet Name?',
+      steps: [
+        'Sheet Name is the tab name at the bottom of your spreadsheet.',
+        '',
+        'Example: Sheet1',
+        'Leave empty to use the first sheet.'
+      ],
+      example: 'Sheet1'
+    },
+    range: {
+      title: 'How to set Range?',
+      steps: [
+        'Range defines which cells to read or write.',
+        '',
+        'Examples:',
+        '• A1:D10',
+        '• A1:D (all rows in columns A–D)',
+        '',
+        'Leave empty to read all used cells.'
+      ],
+      example: 'A1:D10'
+    },
+    outputFormat: {
+      title: 'How to choose Output Format?',
+      steps: [
+        'Output Format controls how data is returned when reading.',
+        '',
+        'Options:',
+        '• JSON Array',
+        '• Key‑Value Pairs',
+        '• Plain Text Table'
+      ],
+      example: 'json'
+    },
+    readDirection: {
+      title: 'How to set Read Direction?',
+      steps: [
+        'Read Direction chooses row‑wise or column‑wise output.',
+        '',
+        'Row‑wise is the default and most common.'
+      ],
+      example: 'rows'
+    },
+    allowWrite: {
+      title: 'What is Allow Write Access?',
+      steps: [
+        'Enable this to allow Write/Append/Update operations.',
+        '',
+        'If disabled, the node will only read data.',
+        'This may be restricted to admin users.'
+      ],
+      example: 'false'
+    },
+    data: {
+      title: 'How to set Data to Write (JSON)?',
+      steps: [
+        'Data is required for Write, Append, or Update.',
+        '',
+        'Use a JSON array of rows:',
+        '[["Name","Email"],["John","john@example.com"]]',
+        '',
+        'Tip: Ensure your data matches the sheet structure.'
+      ],
+      example: '[["Name","Email"],["John","john@example.com"]]'
     }
   },
   twitter: {
@@ -3607,6 +3855,18 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
   },
   // CRM Services
   hubspot: {
+    authType: {
+      title: 'How to choose Authentication Type?',
+      steps: [
+        'Choose how this node connects to HubSpot.',
+        '',
+        '• API Key: Older method. Only use if your account still allows it.',
+        '• OAuth2 Access Token (Private App): Recommended and more secure.',
+        '',
+        'Tip: Use a Private App token for production workflows.'
+      ],
+      example: 'oauth'
+    },
     apiKey: {
       title: 'HubSpot API Key – Step-by-Step',
       url: 'https://app.hubspot.com',
@@ -3670,6 +3930,111 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
         'pat-na1-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
       ],
       example: 'pat-na1-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
+    },
+    resource: {
+      title: 'How to choose Resource (Object Type)?',
+      steps: [
+        'Resource tells HubSpot which CRM object you want to manage.',
+        '',
+        'Common choices:',
+        '• Contact – People in your CRM',
+        '• Company – Organizations',
+        '• Deal – Sales opportunities',
+        '• Ticket – Support tickets',
+        '• Engagements – Calls, emails, meetings, notes, tasks',
+        '',
+        'Tip: Pick the object that matches the data you want to create or update.'
+      ],
+      example: 'contact'
+    },
+    operation: {
+      title: 'How to choose Operation?',
+      steps: [
+        'Operation defines the action you want to perform on the selected object.',
+        '',
+        'Common operations:',
+        '• Get – Fetch one record by ID',
+        '• Get Many – Fetch multiple records',
+        '• Create – Add a new record',
+        '• Update – Modify an existing record',
+        '• Delete – Remove a record',
+        '• Search – Find records by query',
+        '• Batch – Create/Update/Delete multiple records at once',
+        '',
+        'Tip: Use Search before Create to avoid duplicates.'
+      ],
+      example: 'create'
+    },
+    id: {
+      title: 'How to get Resource ID?',
+      steps: [
+        'Resource ID is the unique ID of the HubSpot record.',
+        '',
+        'How to find it:',
+        '• From a previous HubSpot node output (id field)',
+        '• From a Search operation result',
+        '• From the HubSpot record URL',
+        '',
+        'Tip: This field is required for Get, Update, and Delete.'
+      ],
+      example: '123456789'
+    },
+    properties: {
+      title: 'How to set Properties (JSON)?',
+      steps: [
+        'Properties is a JSON object with HubSpot field names and values.',
+        '',
+        'Example (Contact):',
+        '{ "email": "user@example.com", "firstname": "John", "lastname": "Doe" }',
+        '',
+        'Tips:',
+        '• Use HubSpot internal field names (not labels)',
+        '• Only include fields you want to create or update',
+        '• For custom fields, use the custom property key',
+        '',
+        'This field is required for Create and Update.'
+      ],
+      example: '{"email":"user@example.com","firstname":"John","lastname":"Doe"}'
+    },
+    searchQuery: {
+      title: 'How to write a Search Query?',
+      steps: [
+        'Search Query is used when Operation = Search.',
+        '',
+        'Format example:',
+        '• email:test@example.com',
+        '• firstname:John',
+        '',
+        'Tip: Start simple with one field and expand as needed.'
+      ],
+      example: 'email:test@example.com'
+    },
+    limit: {
+      title: 'How to set Limit?',
+      steps: [
+        'Limit controls how many records are returned.',
+        '',
+        'Recommended values:',
+        '• 10–50 for most workflows',
+        '• 100+ only if you need large batches',
+        '',
+        'Tip: Use pagination with "After" when retrieving large datasets.'
+      ],
+      example: '10'
+    },
+    after: {
+      title: 'What is After (Pagination)?',
+      steps: [
+        'After is a paging token used to fetch the next page of results.',
+        '',
+        'How to use it:',
+        '• Run a Get Many or Search',
+        '• Read the paging token from the output',
+        '• Pass it into After to get the next page',
+        '',
+        'Leave empty for the first page.'
+      ],
+      example: 'paging_token'
     }
   },
   salesforce: {
@@ -4681,6 +5046,18 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
         '[YOUR_SLACK_WEBHOOK_URL] - Format: https://hooks.slack.com/services/...'
       ],
       example: '[YOUR_SLACK_WEBHOOK_URL]'
+    },
+    text: {
+      title: 'How to write Text?',
+      steps: [
+        'Text is the message sent to Slack.',
+        '',
+        'You can use Slack markdown and emojis.',
+        'Example: "New user registered 🎉"',
+        '',
+        'Tip: Insert dynamic values like {{input.field}}.'
+      ],
+      example: 'New user registered successfully 🎉'
     }
   },
   discord_webhook: {
@@ -4750,6 +5127,245 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
         'https://outlook.office.com/webhook/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx@xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/IncomingWebhook/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
       ],
       example: 'https://outlook.office.com/webhook/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx@xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/IncomingWebhook/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
+    },
+    title: {
+      title: 'How to set Title?',
+      steps: [
+        'Title appears at the top of the Teams message card.',
+        '',
+        'Example: "Workflow Notification"',
+        'Leave empty if you don’t need a title.'
+      ],
+      example: 'Workflow Notification'
+    },
+    message: {
+      title: 'How to write Message?',
+      steps: [
+        'Message is the main content sent to Teams.',
+        '',
+        'You can include basic formatting and emojis.',
+        'Use dynamic values like {{input.field}} if needed.'
+      ],
+      example: '✅ Task completed successfully'
+    }
+  },
+  salesforce: {
+    instanceUrl: {
+      title: 'Salesforce Instance URL – Step-by-Step',
+      steps: [
+        'Instance URL is your Salesforce org URL.',
+        '',
+        'Example: https://yourinstance.salesforce.com',
+        'Copy it from your browser after logging in.'
+      ],
+      example: 'https://yourinstance.salesforce.com'
+    },
+    accessToken: {
+      title: 'Salesforce Access Token – Step-by-Step',
+      steps: [
+        'Access Token is generated via OAuth.',
+        '',
+        'Use your Salesforce OAuth flow to get it,',
+        'then paste it into this field.'
+      ],
+      example: '00Dxx0000000000!AQ0...'
+    },
+    resource: {
+      title: 'How to choose Resource/Object?',
+      steps: [
+        'Select the Salesforce object you want to work with.',
+        '',
+        'Common objects: Account, Contact, Lead, Opportunity, Case.',
+        'Use Custom Object if you need a custom object.'
+      ],
+      example: 'Contact'
+    },
+    customObject: {
+      title: 'How to set Custom Object API Name?',
+      steps: [
+        'Required only if Resource is Custom Object.',
+        '',
+        'Find the API name in Salesforce Setup → Object Manager.',
+        'Custom objects end with __c.'
+      ],
+      example: 'CustomObject__c'
+    },
+    operation: {
+      title: 'How to choose Operation?',
+      steps: [
+        'Choose the action to perform.',
+        '',
+        'Examples:',
+        '• query (SOQL)',
+        '• search (SOSL)',
+        '• get / create / update / delete',
+        '• upsert / bulk operations'
+      ],
+      example: 'query'
+    },
+    soql: {
+      title: 'How to write SOQL Query?',
+      steps: [
+        'SOQL is used for structured queries.',
+        '',
+        'Example:',
+        'SELECT Id, Name, Email FROM Contact WHERE Email != null'
+      ],
+      example: 'SELECT Id, Name FROM Contact LIMIT 10'
+    },
+    sosl: {
+      title: 'How to write SOSL Search Query?',
+      steps: [
+        'SOSL searches text across objects.',
+        '',
+        'Example:',
+        'FIND {john} IN ALL FIELDS RETURNING Contact(Id, Name, Email)'
+      ],
+      example: 'FIND {john} IN ALL FIELDS RETURNING Contact(Id, Name, Email)'
+    },
+    id: {
+      title: 'How to get Record ID?',
+      steps: [
+        'Record ID is the unique Salesforce identifier.',
+        '',
+        'Copy it from the record URL or from a query result.'
+      ],
+      example: '0035g00000ABCDe'
+    },
+    fields: {
+      title: 'How to set Fields (JSON)?',
+      steps: [
+        'Fields is a JSON object with Salesforce field API names.',
+        '',
+        'Example:',
+        '{ "FirstName": "John", "LastName": "Doe", "Email": "john@example.com" }'
+      ],
+      example: '{"FirstName":"John","LastName":"Doe","Email":"john@example.com"}'
+    },
+    externalIdField: {
+      title: 'How to set External ID Field?',
+      steps: [
+        'Used for upsert operations.',
+        '',
+        'Example: Email or External_Id__c'
+      ],
+      example: 'Email'
+    },
+    externalIdValue: {
+      title: 'How to set External ID Value?',
+      steps: [
+        'The value to match for upsert.',
+        '',
+        'Example: john@example.com'
+      ],
+      example: 'john@example.com'
+    }
+  },
+  zoho_crm: {
+    accessToken: {
+      title: 'Zoho CRM Access Token – Step-by-Step',
+      steps: [
+        'Access Token is generated via OAuth.',
+        '',
+        'Use your Zoho OAuth flow to get the token,',
+        'then paste it into this field.'
+      ],
+      example: '1000.xxxxxxx'
+    },
+    apiDomain: {
+      title: 'How to choose API Domain?',
+      steps: [
+        'API Domain depends on your Zoho region.',
+        '',
+        'Examples:',
+        '• https://www.zohoapis.com (US)',
+        '• https://www.zohoapis.eu (EU)',
+        '• https://www.zohoapis.in (IN)'
+      ],
+      example: 'https://www.zohoapis.com'
+    },
+    module: {
+      title: 'How to choose Module?',
+      steps: [
+        'Select the Zoho CRM module you want to work with.',
+        '',
+        'Examples: Leads, Contacts, Accounts, Deals, Tasks, Calls.'
+      ],
+      example: 'Contacts'
+    },
+    customModule: {
+      title: 'How to set Custom Module API Name?',
+      steps: [
+        'Required only if Module is Custom Module.',
+        '',
+        'Find the API name in Zoho CRM setup.'
+      ],
+      example: 'CustomModule1'
+    },
+    operation: {
+      title: 'How to choose Operation?',
+      steps: [
+        'Choose the action to perform.',
+        '',
+        'Examples: Get, Get Many, Create, Update, Delete, Search, Upsert.'
+      ],
+      example: 'get'
+    },
+    id: {
+      title: 'How to get Record ID?',
+      steps: [
+        'Record ID is the unique Zoho CRM identifier.',
+        '',
+        'Copy it from the record URL or from a query result.'
+      ],
+      example: '4876876000000123456'
+    },
+    data: {
+      title: 'How to set Data (JSON)?',
+      steps: [
+        'Data is a JSON object with Zoho CRM field API names.',
+        '',
+        'Example:',
+        '{ "Last_Name": "Sharma", "First_Name": "Amit", "Email": "amit.sharma@example.com" }'
+      ],
+      example: '{"Last_Name":"Sharma","First_Name":"Amit","Email":"amit.sharma@example.com"}'
+    },
+    criteria: {
+      title: 'How to set Search Criteria?',
+      steps: [
+        'Criteria is used for Search operation.',
+        '',
+        'Example:',
+        '(Email:equals:amit.sharma@example.com)'
+      ],
+      example: '(Email:equals:amit.sharma@example.com)'
+    },
+    fields: {
+      title: 'How to set Fields?',
+      steps: [
+        'Fields are comma‑separated field API names to return.',
+        '',
+        'Example: id,First_Name,Last_Name,Email'
+      ],
+      example: 'id,First_Name,Last_Name,Email'
+    },
+    page: {
+      title: 'How to set Page Number?',
+      steps: [
+        'Page controls pagination (starts at 1).',
+        '',
+        'Use with Records Per Page for large datasets.'
+      ],
+      example: '1'
+    },
+    perPage: {
+      title: 'How to set Records Per Page?',
+      steps: [
+        'Records per page (max 200).',
+        '',
+        'Use smaller values for large queries.'
+      ],
+      example: '200'
     }
   },
   // Cloud Storage
@@ -5815,6 +6431,74 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
         'eyJhbGciOiJSUzI1NiIsImtpZCI6...'
       ],
       example: 'eyJhbGciOiJSUzI1NiIsImtpZCI6...'
+    },
+    operation: {
+      title: 'How to choose Operation?',
+      steps: [
+        'Operation defines the action you want to perform on the cluster.',
+        '',
+        'Examples:',
+        '• List Pods / Get Pod',
+        '• List Deployments / Get Deployment',
+        '• Create or Update Deployment',
+        '• Scale or Restart Deployment',
+        '• List Services / Get Service',
+        '• Get Pod Logs',
+        '',
+        'Choose the action that matches your workflow step.'
+      ],
+      example: 'list_pods'
+    },
+    namespace: {
+      title: 'How to set Namespace?',
+      steps: [
+        'Namespace is where the resource lives.',
+        '',
+        'Common values:',
+        '• default (most common)',
+        '• kube-system (system resources)',
+        '• production / staging / dev (custom)',
+        '',
+        'How to find it:',
+        '• kubectl get namespaces',
+        '• Kubernetes dashboard',
+        '• Ask your cluster admin'
+      ],
+      example: 'default'
+    },
+    resourceName: {
+      title: 'How to get Resource Name?',
+      steps: [
+        'Resource Name is the name of the pod, deployment, or service.',
+        '',
+        'How to find it:',
+        '• kubectl get pods / deployments / services',
+        '• Kubernetes dashboard resource list',
+        '• From a previous list operation output'
+      ],
+      example: 'backend-api'
+    },
+    deploymentManifest: {
+      title: 'How to provide Deployment Manifest (JSON)?',
+      steps: [
+        'Deployment Manifest defines the deployment you want to create or update.',
+        '',
+        'You can convert YAML to JSON or build JSON directly.',
+        'Minimum fields: apiVersion, kind, metadata.name, spec',
+        '',
+        'Tip: Validate your manifest before submitting.'
+      ],
+      example: '{"apiVersion":"apps/v1","kind":"Deployment","metadata":{"name":"backend-api"},"spec":{"replicas":2}}'
+    },
+    replicas: {
+      title: 'How to set Replicas?',
+      steps: [
+        'Replicas is the number of pods you want running.',
+        '',
+        'Use it for scale operations.',
+        'Example: 3 = run three pod replicas.'
+      ],
+      example: '3'
     }
   },
   // Snowflake
@@ -6654,6 +7338,17 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
     }
   },
   jenkins: {
+    baseUrl: {
+      title: 'How to get Jenkins URL?',
+      steps: [
+        'Jenkins URL is the base address of your Jenkins server.',
+        '',
+        'Example: https://jenkins.example.com',
+        '',
+        'Tip: Include https:// or http:// and remove any extra paths.'
+      ],
+      example: 'https://jenkins.example.com'
+    },
     username: {
       title: 'Jenkins Username – Step-by-Step',
       steps: [
@@ -6698,6 +7393,76 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
         '11xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
       ],
       example: '11xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+    },
+    operation: {
+      title: 'How to choose Operation?',
+      steps: [
+        'Operation tells Jenkins what action to run.',
+        '',
+        'Common options:',
+        '• Get Job / List Jobs',
+        '• Build Job / Stop Build',
+        '• Get Build / Get Build Status / Get Build Log',
+        '• Poll Build Status (for long builds)',
+        '',
+        'Choose the action that matches your workflow step.'
+      ],
+      example: 'build_job'
+    },
+    jobName: {
+      title: 'How to get Job Name?',
+      steps: [
+        'Open the Jenkins dashboard.',
+        'Click the job you want.',
+        '',
+        'The job name appears in the page title and URL:',
+        'https://jenkins.example.com/job/JOB-NAME/',
+        '',
+        'Tip: For folder jobs, use format: folder/job-name'
+      ],
+      example: 'deploy-backend'
+    },
+    buildNumber: {
+      title: 'How to get Build Number?',
+      steps: [
+        'Build number comes from the job’s build history.',
+        '',
+        'Open the job → Build History',
+        'Copy the number (e.g., #25).'
+      ],
+      example: '25'
+    },
+    parameters: {
+      title: 'How to set Build Parameters (JSON)?',
+      steps: [
+        'Build Parameters are used only for parameterized jobs.',
+        '',
+        'Enter a JSON object with parameter names and values.',
+        'Example: {"ENV":"production","VERSION":"1.2.3"}',
+        '',
+        'Tip: If the job is not parameterized, leave this empty.'
+      ],
+      example: '{"ENV":"production","VERSION":"1.2.3"}'
+    },
+    pollInterval: {
+      title: 'What is Poll Interval?',
+      steps: [
+        'Poll Interval is how often (in seconds) the workflow checks build status.',
+        '',
+        'Common values: 5–15 seconds.',
+        'Use longer intervals for very long builds.'
+      ],
+      example: '10'
+    },
+    maxPollAttempts: {
+      title: 'What is Max Poll Attempts?',
+      steps: [
+        'Max Poll Attempts limits how many times to check build status.',
+        '',
+        'Example: 60 attempts with 10s interval = 10 minutes total.',
+        'Increase if your builds take longer.'
+      ],
+      example: '60'
     }
   },
   pagerduty: {
@@ -6729,6 +7494,423 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
         'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
       ],
       example: 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+    },
+    operation: {
+      title: 'How to choose Operation?',
+      steps: [
+        'Operation defines what action you want to perform.',
+        '',
+        'Common operations:',
+        '• Create / Update / Get Incident',
+        '• Acknowledge / Resolve Incident',
+        '• List On-Calls or Schedules',
+        '',
+        'Pick the action that matches your workflow step.'
+      ],
+      example: 'create_incident'
+    },
+    incidentId: {
+      title: 'How to get Incident ID?',
+      steps: [
+        'Open the incident in PagerDuty.',
+        '',
+        'The ID appears in the URL:',
+        'app.pagerduty.com/incidents/INCIDENT_ID',
+        '',
+        'Copy the ID from the URL or incident header.'
+      ],
+      example: 'QWER456'
+    },
+    title: {
+      title: 'How to write Incident Title?',
+      steps: [
+        'Title should be short and actionable.',
+        '',
+        'Example: "Database connection failure"',
+        'Tip: Include the system and the problem.'
+      ],
+      example: 'Database connection failure'
+    },
+    serviceId: {
+      title: 'How to get Service ID?',
+      steps: [
+        'Go to PagerDuty → Services.',
+        'Click the service you want.',
+        '',
+        'The ID appears in the URL:',
+        'app.pagerduty.com/services/SERVICE_ID',
+        '',
+        'Copy that ID into this field.'
+      ],
+      example: 'PABC123'
+    },
+    urgency: {
+      title: 'How to set Urgency?',
+      steps: [
+        'Urgency defines how critical the incident is.',
+        '',
+        'Values:',
+        '• high – immediate attention',
+        '• low – less urgent',
+        '',
+        'Use high only for real critical issues.'
+      ],
+      example: 'high'
+    },
+    status: {
+      title: 'How to set Status?',
+      steps: [
+        'Status is used when updating an incident.',
+        '',
+        'Values:',
+        '• triggered',
+        '• acknowledged',
+        '• resolved'
+      ],
+      example: 'acknowledged'
+    },
+    escalationPolicyId: {
+      title: 'How to get Escalation Policy ID?',
+      steps: [
+        'Go to PagerDuty → Escalation Policies.',
+        'Open the policy you need.',
+        '',
+        'Copy the ID from the URL:',
+        'app.pagerduty.com/escalation_policies/ESCALATION_ID'
+      ],
+      example: 'EP12345'
+    },
+    assigneeId: {
+      title: 'How to get Assignee User ID?',
+      steps: [
+        'Open the user profile in PagerDuty.',
+        '',
+        'Copy the user ID from the URL:',
+        'app.pagerduty.com/users/USER_ID'
+      ],
+      example: 'U123ABC'
+    },
+    note: {
+      title: 'How to add a Note?',
+      steps: [
+        'Add a short note when acknowledging or resolving.',
+        '',
+        'Example: "Investigating database latency."',
+        'Tip: Keep notes concise and actionable.'
+      ],
+      example: 'Investigating database latency.'
+    },
+    scheduleId: {
+      title: 'How to get Schedule ID?',
+      steps: [
+        'Go to PagerDuty → Configuration → Schedules.',
+        'Open the schedule.',
+        '',
+        'Copy the ID from the URL:',
+        'app.pagerduty.com/schedules/SCHEDULE_ID'
+      ],
+      example: 'PSCHED123'
+    }
+  },
+  http_post: {
+    url: {
+      title: 'How to set the URL?',
+      steps: [
+        'URL is the full endpoint where the POST request is sent.',
+        '',
+        'Examples:',
+        '• https://api.example.com/create-user',
+        '• https://hooks.service.com/trigger?id=123',
+        '',
+        'Tip: Include http:// or https://.'
+      ],
+      example: 'https://api.example.com/create-user'
+    },
+    headers: {
+      title: 'How to set Headers (JSON)?',
+      steps: [
+        'Headers are key-value pairs for authentication and content type.',
+        '',
+        'Common headers:',
+        '• Content-Type: application/json',
+        '• Authorization: Bearer YOUR_TOKEN',
+        '',
+        'Example JSON:',
+        '{ "Content-Type": "application/json", "Authorization": "Bearer YOUR_TOKEN" }'
+      ],
+      example: '{"Content-Type":"application/json","Authorization":"Bearer YOUR_TOKEN"}'
+    },
+    bodyTemplate: {
+      title: 'How to write Body Template?',
+      steps: [
+        'Body Template is the request body sent to the API.',
+        '',
+        'Use JSON for most APIs, or plain text if required.',
+        'You can insert dynamic values like {{input}} or {{input.field}}.',
+        '',
+        'Example:',
+        '{ "event": "created", "data": {{input}} }'
+      ],
+      example: '{"event":"created","data":{{input}}}'
+    }
+  },
+  respond_to_webhook: {
+    statusCode: {
+      title: 'How to set Status Code?',
+      steps: [
+        'Status Code is the HTTP code returned to the webhook caller.',
+        '',
+        'Common values:',
+        '• 200 – Success',
+        '• 201 – Created',
+        '• 400 – Bad request',
+        '• 401 – Unauthorized',
+        '• 404 – Not found',
+        '• 500 – Server error',
+        '',
+        'Tip: Use 200 when processing succeeds.'
+      ],
+      example: '200'
+    },
+    responseBody: {
+      title: 'How to write Response Body (JSON)?',
+      steps: [
+        'Response Body is the JSON sent back to the caller.',
+        '',
+        'Example:',
+        '{ "status": "success", "message": "Processed" }',
+        '',
+        'You can include dynamic values like {{input}}.'
+      ],
+      example: '{"status":"success","message":"Processed"}'
+    },
+    headers: {
+      title: 'How to set Custom Headers (JSON)?',
+      steps: [
+        'Headers are optional key‑value pairs in JSON.',
+        '',
+        'Common header:',
+        '• Content-Type: application/json',
+        '',
+        'Example:',
+        '{ "Content-Type": "application/json" }'
+      ],
+      example: '{"Content-Type":"application/json"}'
+    }
+  },
+  switch: {
+    expression: {
+      title: 'How to set Expression?',
+      steps: [
+        'Expression is the value you want to match against cases.',
+        '',
+        'Use a field from previous nodes, e.g. {{input.status}}.',
+        'The expression result is compared to each case value.'
+      ],
+      example: '{{input.status}}'
+    },
+    cases: {
+      title: 'How to set Cases (JSON)?',
+      steps: [
+        'Cases is a JSON array. Each case creates a branch.',
+        '',
+        'Format:',
+        '[{"value":"success","label":"Success"},{"value":"failed","label":"Failed"}]',
+        '',
+        'Value must match the expression result exactly.',
+        'Label becomes the output branch name.'
+      ],
+      example: '[{"value":"success","label":"Success"},{"value":"failed","label":"Failed"}]'
+    }
+  },
+  if_else: {
+    condition: {
+      title: 'How to write Condition?',
+      steps: [
+        'Condition is a JavaScript expression that returns true or false.',
+        '',
+        'Examples:',
+        '• {{input.value}} > 10',
+        '• {{input.status}} === "active"',
+        '• {{input.count}} >= 5',
+        '',
+        'Tip: Use && or || to combine conditions.'
+      ],
+      example: '{{input.value}} > 10'
+    }
+  },
+  email: {
+    to: {
+      title: 'How to set To?',
+      steps: [
+        'To is the recipient email address.',
+        '',
+        'You can enter a static address or a variable like {{input.email}}.'
+      ],
+      example: 'user@example.com'
+    },
+    subject: {
+      title: 'How to set Subject?',
+      steps: [
+        'Subject is the email title shown in the inbox.',
+        '',
+        'Keep it short and clear.'
+      ],
+      example: 'Your Order Has Been Shipped'
+    },
+    text: {
+      title: 'How to write Text?',
+      steps: [
+        'Text is the plain‑text email body.',
+        '',
+        'Use it for simple messages or as a fallback.'
+      ],
+      example: 'Hello, your order is on the way!'
+    },
+    html: {
+      title: 'How to write HTML?',
+      steps: [
+        'HTML is the rich‑text email body.',
+        '',
+        'Use valid HTML tags and keep it lightweight.'
+      ],
+      example: '<h1>Hello</h1><p>Your order is on the way!</p>'
+    }
+  },
+  email_sequence_sender: {
+    recipient: {
+      title: 'How to set Recipient (JSON)?',
+      steps: [
+        'Recipient is a JSON object with email and optional name.',
+        '',
+        'Example:',
+        '{"email": "user@example.com", "name": "John Doe"}'
+      ],
+      example: '{"email":"user@example.com","name":"John Doe"}'
+    },
+    sequence: {
+      title: 'How to set Sequence Steps (JSON Array)?',
+      steps: [
+        'Sequence is a JSON array of steps.',
+        '',
+        'Each step includes:',
+        '• step (number)',
+        '• subject (string)',
+        '• body (string)',
+        '• delayAfter (seconds)',
+        '• sendCondition (optional)',
+        '',
+        'Example:',
+        '[{"step":1,"subject":"Welcome","body":"Hello!","delayAfter":0}]'
+      ],
+      example: '[{"step":1,"subject":"Welcome","body":"Hello!","delayAfter":0}]'
+    },
+    stopOnReply: {
+      title: 'What is Stop on Reply?',
+      steps: [
+        'When enabled, the sequence stops if the recipient replies.',
+        '',
+        'Use this to avoid sending follow‑ups after engagement.'
+      ],
+      example: 'true'
+    },
+    tracking: {
+      title: 'How to set Tracking Settings (JSON)?',
+      steps: [
+        'Tracking controls open and click tracking.',
+        '',
+        'Example:',
+        '{"openTracking": true, "clickTracking": true}'
+      ],
+      example: '{"openTracking":true,"clickTracking":true}'
+    }
+  },
+  merge: {
+    mode: {
+      title: 'How to choose Mode?',
+      steps: [
+        'Mode defines how inputs are combined.',
+        '',
+        'Options:',
+        '• merge – combine object fields',
+        '• append – add items to an array',
+        '• key_based – merge by a shared key',
+        '• wait_all – wait for all inputs',
+        '• concat – join arrays',
+        '',
+        'Choose the simplest mode that fits your data.'
+      ],
+      example: 'merge'
+    },
+    mergeKey: {
+      title: 'How to set Merge Key?',
+      steps: [
+        'Merge Key is required for key‑based merge.',
+        '',
+        'Pick a field that exists in all inputs, e.g. "id" or "user_id".',
+        'Records with the same key will be combined.'
+      ],
+      example: 'user_id'
+    }
+  },
+  webhook: {
+    method: {
+      title: 'How to choose HTTP Method?',
+      steps: [
+        'Method is how the webhook accepts incoming requests.',
+        '',
+        'Supported values:',
+        '• GET – send data in URL/query',
+        '• POST – send data in the body (most common)',
+        '• PUT – update/replace data',
+        '',
+        'Tip: Use POST for most webhook integrations.'
+      ],
+      example: 'POST'
+    }
+  },
+  discord_webhook: {
+    webhookUrl: {
+      title: 'How to get Discord Webhook URL?',
+      steps: [
+        'Go to your Discord server → Server Settings → Integrations → Webhooks.',
+        'Create a webhook or select an existing one.',
+        '',
+        'Choose the channel and click "Copy Webhook URL".',
+        'Paste it into this field.'
+      ],
+      example: 'https://discord.com/api/webhooks/...'
+    },
+    content: {
+      title: 'How to write Message?',
+      steps: [
+        'Message is the text posted to the channel.',
+        '',
+        'Supports Discord markdown:',
+        '• **bold**, *italic*, `code`, and line breaks',
+        '',
+        'Tip: You can include dynamic data like {{input.field}}.'
+      ],
+      example: '✅ Workflow completed successfully!'
+    },
+    username: {
+      title: 'How to set Username?',
+      steps: [
+        'Username is an optional override for the webhook sender name.',
+        '',
+        'Leave empty to use the webhook’s default name.'
+      ],
+      example: 'CtrlChecks Bot'
+    },
+    avatarUrl: {
+      title: 'How to set Avatar URL?',
+      steps: [
+        'Avatar URL is an optional image for the webhook sender.',
+        '',
+        'Use a direct image link (PNG, JPG, GIF).',
+        'Leave empty to use the webhook’s default avatar.'
+      ],
+      example: 'https://example.com/avatar.png'
     }
   },
   datadog: {
@@ -8135,6 +9317,449 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
         'This field is only used when Operation = Create or Update. It is ignored for List Tasks and Complete Task.'
       ],
       example: '2024-01-15T23:59:59Z'
+    }
+  },
+  fraud_detection_node: {
+    transaction: {
+      title: 'How to build the Transaction (JSON)?',
+      steps: [
+        'The Transaction field is a single JSON object that describes the event you want to check for fraud.',
+        '',
+        'Include the core details so the model can evaluate risk:',
+        '• id: Unique transaction ID from your payment/order system',
+        '• amount: Numeric value (no currency symbols)',
+        '• currency: 3-letter currency code (USD, INR, EUR)',
+        '• merchant: Store, seller, or channel name',
+        '• location: Country or region where the transaction happened',
+        '• timestamp: ISO date-time (e.g., 2026-02-01T14:32:00Z)',
+        '',
+        'Where to get these values:',
+        '• Payment gateway or order system for id, amount, currency',
+        '• User profile or billing address for location',
+        '• Your database or logs for timestamp',
+        '',
+        'Tip: If you do not have a field, leave it out rather than guessing.'
+      ],
+      example: '{"id":"txn_98456321","amount":4999.00,"currency":"INR","merchant":"Store A","location":"India","timestamp":"2026-02-01T14:32:00Z"}'
+    },
+    historicalPatterns: {
+      title: 'How to set Historical Patterns (JSON)?',
+      steps: [
+        'Historical Patterns is optional context about typical behavior for this user or account.',
+        '',
+        'Use it to help the model compare the current transaction against normal activity.',
+        '',
+        'Common fields include:',
+        '• averageAmount: Typical transaction size',
+        '• commonMerchants: Usual merchants or channels',
+        '• commonLocations: Usual countries or regions',
+        '',
+        'How to get these values:',
+        '• Calculate averages from your last 30–90 days of transactions',
+        '• Use your analytics or reporting dashboards',
+        '• Store per-user stats in your database for easy reuse',
+        '',
+        'Tip: If you do not track history, use an empty object {}.'
+      ],
+      example: '{"averageAmount":800,"commonMerchants":["Store A","Store B"],"commonLocations":["India"]}'
+    },
+    riskThreshold: {
+      title: 'How to set Risk Threshold?',
+      steps: [
+        'Risk Threshold is the score above which a transaction is flagged as risky.',
+        '',
+        'This node expects a value from 0 to 1.',
+        '• 0.3 = Low threshold (more alerts)',
+        '• 0.6 = Medium threshold (balanced)',
+        '• 0.8 = High threshold (fewer alerts)',
+        '',
+        'How to choose a value:',
+        '• Start with 0.7 (default)',
+        '• Lower it if fraud is missed',
+        '• Raise it if too many false positives appear',
+        '',
+        'Tip: Review outcomes weekly and adjust gradually.'
+      ],
+      example: '0.7'
+    }
+  },
+  resume_parser: {
+    file: {
+      title: 'How to provide the Resume File (JSON)?',
+      steps: [
+        'This field expects a JSON file object with the resume content in Base64.',
+        '',
+        'Required keys:',
+        '• name: File name (e.g., resume.pdf)',
+        '• type: File type (pdf, doc, docx, txt, image)',
+        '• binary: Base64-encoded file content',
+        '',
+        'How to get this value:',
+        '• From a Form upload field (use its file output)',
+        '• From email attachments or file storage nodes',
+        '• By encoding a local file to Base64 in your system',
+        '',
+        'Tip: Use clean, text-based PDFs for best accuracy.'
+      ],
+      example: '{"name":"John_Doe_Resume.pdf","type":"pdf","binary":"base64..."}'
+    },
+    normalizeSkills: {
+      title: 'What is Normalize Skills?',
+      steps: [
+        'Normalize Skills standardizes skill names so they match common formats.',
+        '',
+        'Examples:',
+        '• JS → JavaScript',
+        '• Py → Python',
+        '',
+        'Turn this on for better matching and cleaner skill lists.',
+        'Turn it off only if you want the raw skill text as-is.'
+      ],
+      example: 'true'
+    },
+    experienceCalculation: {
+      title: 'What is Calculate Experience?',
+      steps: [
+        'Calculate Experience estimates total years of experience from the resume timeline.',
+        '',
+        'Turn this on if you need a single number like "5.5 years".',
+        'Turn it off if you only want raw job history details.'
+      ],
+      example: 'true'
+    }
+  },
+  bitbucket: {
+    username: {
+      title: 'How to get Bitbucket Username?',
+      steps: [
+        'Your username is part of your Bitbucket profile.',
+        '',
+        'Steps:',
+        '• Log in to bitbucket.org',
+        '• Click your profile picture → Personal settings',
+        '• Copy your username from the account settings',
+        '',
+        'Tip: It also appears in your profile URL: bitbucket.org/USERNAME'
+      ],
+      example: 'your-username'
+    },
+    appPassword: {
+      title: 'How to create a Bitbucket App Password?',
+      steps: [
+        'App Passwords are required for API access.',
+        '',
+        'Steps:',
+        '• Go to Personal settings → App passwords',
+        '• Click "Create app password"',
+        '• Give it a label (e.g., "Automation Access")',
+        '• Enable required permissions (Repos, PRs, Issues)',
+        '• Click Create and copy the password',
+        '',
+        'Important: You cannot view it again, so store it securely.'
+      ],
+      example: 'app-password-from-bitbucket'
+    },
+    operation: {
+      title: 'How to choose Operation?',
+      steps: [
+        'Operation defines what action the node should perform.',
+        '',
+        'Common choices:',
+        '• Get/List Repository',
+        '• Create/Update/Merge Pull Request',
+        '• List/Get Branches and Commits',
+        '• Get Pipeline status',
+        '',
+        'Tip: Choose the action that matches your workflow step.'
+      ],
+      example: 'create_pr'
+    },
+    workspace: {
+      title: 'How to get Workspace ID?',
+      steps: [
+        'Workspace ID is the first part of the Bitbucket URL.',
+        '',
+        'Example URL:',
+        'bitbucket.org/WORKSPACE/repo-name',
+        '',
+        'The WORKSPACE part is what you need.',
+        'For personal repos, it is often your username.'
+      ],
+      example: 'my-company-workspace'
+    },
+    repo: {
+      title: 'How to get Repository Name?',
+      steps: [
+        'Open the repository in Bitbucket.',
+        '',
+        'Copy the repo name from:',
+        '• The page header, or',
+        '• The URL: bitbucket.org/workspace/REPO',
+        '',
+        'Tip: Use the repository slug, not the display title.'
+      ],
+      example: 'backend-api'
+    },
+    title: {
+      title: 'How to set Pull Request Title?',
+      steps: [
+        'Title is a short summary of what your PR does.',
+        '',
+        'Example: "Add login feature"',
+        'Tip: Keep it clear and action-focused.'
+      ],
+      example: 'Add login feature'
+    },
+    description: {
+      title: 'How to set Pull Request Description?',
+      steps: [
+        'Description is a longer explanation of the changes.',
+        '',
+        'Include:',
+        '• What changed',
+        '• Why it changed',
+        '• Testing steps (if any)'
+      ],
+      example: 'Adds login form, validation, and API integration.'
+    },
+    sourceBranch: {
+      title: 'How to get Source Branch?',
+      steps: [
+        'Source Branch is the branch where changes are made.',
+        '',
+        'Find it in the Branches list or your PR creation screen.',
+        'Example: feature/login'
+      ],
+      example: 'feature/login'
+    },
+    destinationBranch: {
+      title: 'How to get Destination Branch?',
+      steps: [
+        'Destination Branch is the branch you want to merge into.',
+        '',
+        'Common choices: main or master.',
+        'Use the default branch if unsure.'
+      ],
+      example: 'main'
+    },
+    prId: {
+      title: 'How to get Pull Request ID?',
+      steps: [
+        'Open the pull request in Bitbucket.',
+        '',
+        'The PR ID is the number in the URL:',
+        'bitbucket.org/workspace/repo/pull-requests/123',
+        '',
+        'The number after /pull-requests/ is the ID.'
+      ],
+      example: '42'
+    },
+    comment: {
+      title: 'How to add a PR Comment?',
+      steps: [
+        'Type the exact comment text you want to post on the PR.',
+        '',
+        'Tip: Use this for approvals, feedback, or automated updates.'
+      ],
+      example: 'Looks good to me.'
+    },
+    mergeStrategy: {
+      title: 'How to choose Merge Strategy?',
+      steps: [
+        'Merge Strategy controls how commits are combined.',
+        '',
+        'Options:',
+        '• Merge Commit – keeps all commits',
+        '• Squash – combines into one commit',
+        '• Fast Forward – no merge commit if possible',
+        '',
+        'Choose based on your team’s Git workflow.'
+      ],
+      example: 'merge_commit'
+    },
+    branchName: {
+      title: 'How to set Branch Name?',
+      steps: [
+        'Branch Name is used for branch actions (create/get/delete).',
+        '',
+        'Example: feature/login',
+        'Tip: Use the exact branch name as shown in Bitbucket.'
+      ],
+      example: 'feature/login'
+    },
+    targetBranch: {
+      title: 'What is Target Branch?',
+      steps: [
+        'Target Branch is used as the base when creating a new branch, or for listing branches.',
+        '',
+        'Example: main',
+        'Tip: Use your default branch if unsure.'
+      ],
+      example: 'main'
+    },
+    commitSha: {
+      title: 'How to get Commit SHA?',
+      steps: [
+        'Commit SHA is the unique identifier for a commit.',
+        '',
+        'Find it in the commit history list or commit details page.',
+        'It looks like a short hash: a1b2c3d4'
+      ],
+      example: 'a1b2c3d4e5'
+    },
+    pipelineUuid: {
+      title: 'How to get Pipeline UUID?',
+      steps: [
+        'Open Pipelines in your repository.',
+        'Click a pipeline run to view details.',
+        '',
+        'The UUID appears in the URL and in API responses.',
+        'Example URL: .../results/UUID'
+      ],
+      example: 'pipeline-uuid'
+    }
+  },
+  docker: {
+    host: {
+      title: 'How to set Docker Host?',
+      steps: [
+        'Docker Host is the address of the Docker daemon.',
+        '',
+        'Common values:',
+        '• localhost (for local TCP access)',
+        '• unix:///var/run/docker.sock (Linux/macOS socket)',
+        '',
+        'Tip: Use the socket for local machines when possible.'
+      ],
+      example: 'localhost'
+    },
+    port: {
+      title: 'How to set Docker Port?',
+      steps: [
+        'Port is used only for TCP connections.',
+        '',
+        'Common values:',
+        '• 2375 = TCP (no TLS)',
+        '• 2376 = TLS',
+        '',
+        'Leave the default unless your Docker daemon uses a different port.'
+      ],
+      example: '2375'
+    },
+    operation: {
+      title: 'How to choose Operation?',
+      steps: [
+        'Operation tells Docker what action to run.',
+        '',
+        'Examples:',
+        '• List Containers / Images',
+        '• Build / Tag / Push / Pull Image',
+        '• Start / Stop / Inspect Container',
+        '',
+        'Pick the action that matches your workflow step.'
+      ],
+      example: 'list_containers'
+    },
+    containerId: {
+      title: 'How to get Container ID or Name?',
+      steps: [
+        'You can use either the container name or ID.',
+        '',
+        'How to find it:',
+        '• Run: docker ps (or docker ps -a)',
+        '• Copy the CONTAINER ID or NAMES value',
+        '',
+        'Tip: Names are easier to remember.'
+      ],
+      example: 'web-server'
+    },
+    imageName: {
+      title: 'How to set Image Name?',
+      steps: [
+        'Image Name follows the format: repository:tag',
+        '',
+        'Examples:',
+        '• nginx:latest',
+        '• node:18',
+        '• registry.example.com/myapp:v1.0.0',
+        '',
+        'Tip: If no tag is provided, "latest" is used.'
+      ],
+      example: 'nginx:latest'
+    },
+    dockerfilePath: {
+      title: 'How to set Dockerfile Path?',
+      steps: [
+        'This is the path to your Dockerfile for builds.',
+        '',
+        'Examples:',
+        '• ./Dockerfile',
+        '• ./docker/Dockerfile',
+        '',
+        'Tip: The path is relative to the build context.'
+      ],
+      example: './Dockerfile'
+    },
+    buildContext: {
+      title: 'What is Build Context?',
+      steps: [
+        'Build Context is the folder Docker uses for build files.',
+        '',
+        'Common value: . (current directory)',
+        'All files in this folder can be accessed by the Dockerfile.'
+      ],
+      example: '.'
+    },
+    tag: {
+      title: 'How to set Tag?',
+      steps: [
+        'Tag is the image name used for tag/push/pull operations.',
+        '',
+        'Format: repository:tag',
+        'Example: myapp:v1.0.0'
+      ],
+      example: 'myapp:v1.0.0'
+    },
+    sourceTag: {
+      title: 'What is Source Tag?',
+      steps: [
+        'Source Tag is the existing image you want to tag.',
+        '',
+        'Example: myapp:latest',
+        'Used only for tag_image operation.'
+      ],
+      example: 'myapp:latest'
+    },
+    registry: {
+      title: 'How to set Registry?',
+      steps: [
+        'Registry is where images are stored.',
+        '',
+        'Examples:',
+        '• docker.io (Docker Hub)',
+        '• registry.example.com',
+        '',
+        'Use the registry required by your organization.'
+      ],
+      example: 'docker.io'
+    },
+    registryUsername: {
+      title: 'How to set Registry Username?',
+      steps: [
+        'Enter the username for your container registry.',
+        '',
+        'Required only for private registries or private images.'
+      ],
+      example: 'registry-user'
+    },
+    registryPassword: {
+      title: 'How to set Registry Password?',
+      steps: [
+        'Enter the password or access token for your registry account.',
+        '',
+        'Tip: Use tokens instead of real passwords when possible.'
+      ],
+      example: 'registry-token'
     }
   }
 };
