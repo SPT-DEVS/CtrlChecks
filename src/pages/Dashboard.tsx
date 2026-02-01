@@ -5,6 +5,7 @@ import { useRole } from "@/hooks/useRole";
 import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/integrations/supabase/client";
 import { Zap, Plus, Play, FolderOpen, LayoutTemplate, History, Settings, MoreHorizontal, Copy, Trash2, Clock, Bot, Workflow, MessageSquare, Sparkles, Wrench, ArrowLeft, Sun, Moon, Activity, User } from "lucide-react";
+import ConnectionsPanel from "@/components/ConnectionsPanel";
 import GoogleConnectionStatus from "@/components/GoogleConnectionStatus";
 import { ProfileSettingsModal } from "@/components/ProfileSettingsModal";
 import { Button } from "@/components/ui/button";
@@ -396,7 +397,7 @@ export default function Dashboard() {
             <span className="text-xl font-bold">CtrlChecks</span>
           </div>
           <div className="flex items-center gap-3">
-            <GoogleConnectionStatus />
+            <ConnectionsPanel />
             <Button
               variant="ghost"
               size="icon"

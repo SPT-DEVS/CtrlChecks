@@ -344,7 +344,7 @@ export default function ExecutionConsole({ isExpanded, onToggle }: ExecutionCons
   return (
     <div className={cn(
       "border-t border-border bg-card transition-all duration-300 flex-shrink-0",
-      isExpanded ? "h-96" : "h-10"
+      isExpanded ? "h-[600px]" : "h-10"
     )}>
       {/* Console Header */}
       <div

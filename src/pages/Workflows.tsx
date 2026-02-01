@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/integrations/supabase/client';
 import { Plus, Search, Zap, MoreHorizontal, Play, Trash2, Copy, Clock, History, Bot, Cpu, Workflow, MessageSquare, ChevronRight, Edit, Sparkles, Wrench, ArrowLeft, User } from 'lucide-react';
+import ConnectionsPanel from '@/components/ConnectionsPanel';
 import GoogleConnectionStatus from '@/components/GoogleConnectionStatus';
 import { ProfileSettingsModal } from '@/components/ProfileSettingsModal';
 import { Button } from '@/components/ui/button';
@@ -300,7 +301,7 @@ export default function Workflows() {
             </Link>
           </div>
           <div className="flex items-center gap-4">
-            <GoogleConnectionStatus />
+            <ConnectionsPanel />
             <span className="text-sm text-muted-foreground">{user.email}</span>
             <Button variant="outline" size="sm" onClick={() => setProfileModalOpen(true)}>
               <User className="mr-2 h-4 w-4" />
