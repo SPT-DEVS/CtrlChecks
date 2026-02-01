@@ -26,11 +26,13 @@ import AdminDashboard from "./pages/admin/AdminDashboard";
 import { AdminRoute } from "./components/admin/AdminRoute";
 import NotFound from "./pages/NotFound";
 import GoogleAuthCallback from "./pages/auth/google/Callback";
+import LinkedInAuthCallback from "./pages/auth/linkedin/Callback";
 import FormTrigger from "./pages/FormTrigger";
 import ModelTestingDashboard from "./pages/ModelTestingDashboard";
 import ModelTestPage from "./pages/ModelTestPage";
 import SchedulerInitializer from "./components/workflow/SchedulerInitializer";
 import { ConnectionStatus } from "./components/ConnectionStatus";
+import Privacy from "./pages/Privacy";
 
 // Component to conditionally render Chatbot only on landing page
 const ConditionalChatbot = () => {
@@ -77,9 +79,11 @@ const App = () => (
                 <Route path="/admin/templates" element={<AdminRoute><TemplatesManager /></AdminRoute>} />
                 <Route path="/admin/template/:id/edit" element={<AdminRoute><TemplateEditor /></AdminRoute>} />
                 <Route path="/auth/google/callback" element={<GoogleAuthCallback />} />
+                <Route path="/auth/linkedin/callback" element={<LinkedInAuthCallback />} />
                 <Route path="/form/:workflowId/:nodeId" element={<FormTrigger />} />
                 <Route path="/model-testing" element={<ModelTestingDashboard />} />
                 <Route path="/model-testing/:category/:model" element={<ModelTestPage />} />
+                <Route path="/privacy" element={<Privacy />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
               <ConditionalChatbot />

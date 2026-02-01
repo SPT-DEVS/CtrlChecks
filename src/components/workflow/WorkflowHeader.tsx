@@ -14,7 +14,7 @@ import {
 import { useWorkflowStore } from '@/stores/workflowStore';
 import WebhookSettings from './WebhookSettings';
 import ScheduleSettings from './ScheduleSettings';
-import GoogleConnectionStatus from '@/components/GoogleConnectionStatus';
+import ConnectionsPanel from '@/components/ConnectionsPanel';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { workflowScheduler } from '@/lib/workflowScheduler';
@@ -221,7 +221,7 @@ export default function WorkflowHeader({
       </div>
 
       <div className="flex items-center gap-2">
-        <GoogleConnectionStatus />
+        <ConnectionsPanel />
         <ScheduleSettings workflowId={workflowId} onScheduleChange={setIsScheduleActive} />
         <WebhookSettings workflowId={workflowId} />
 

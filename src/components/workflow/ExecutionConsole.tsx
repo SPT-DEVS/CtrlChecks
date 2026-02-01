@@ -310,7 +310,33 @@ export default function ExecutionConsole({ isExpanded, onToggle }: ExecutionCons
               );
             }
 
-            const nodeName = log.nodeName || log.nodeId || `Node ${i + 1}`;
+            // Get node name from log, or look it up from workflow store using nodeId
+            // Handle both undefined and empty string cases
+            let nodeName = log.nodeName?.trim() || null;
+            if (!nodeName && log.nodeId) {
+              const nodeFromStore = nodes.find((n: any) => n.id === log.nodeId);
+              if (nodeFromStore) {
+                nodeName = nodeFromStore.data?.label?.trim() || 
+                          nodeFromStore.data?.type || 
+                          null;
+              }
+            }
+            // Final fallback - use nodeId or generate a name
+            if (!nodeName) {
+              if (log.nodeId) {
+                // Try to extract a meaningful name from nodeId if it follows a pattern
+                const nodeIdStr = String(log.nodeId);
+                // If nodeId looks like it contains a type (e.g., "openai_gpt_123"), extract it
+                const typeMatch = nodeIdStr.match(/([a-z_]+)/i);
+                if (typeMatch && typeMatch[1] && typeMatch[1].length > 3) {
+                  nodeName = typeMatch[1].replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                } else {
+                  nodeName = nodeIdStr;
+                }
+              } else {
+                nodeName = `Node ${i + 1}`;
+              }
+            }
             const status = log.status || 'unknown';
             const statusColor = 
               status === 'success' ? 'text-green-500 border-green-500/20 bg-green-500/5' :
@@ -423,7 +449,7 @@ export default function ExecutionConsole({ isExpanded, onToggle }: ExecutionCons
   return (
     <div className={cn(
       "border-t border-border bg-card transition-all duration-300 flex-shrink-0",
-      isExpanded ? "h-96" : "h-10"
+      isExpanded ? "h-[600px]" : "h-10"
     )}>
       {/* Console Header */}
       <div
@@ -589,9 +615,9 @@ export default function ExecutionConsole({ isExpanded, onToggle }: ExecutionCons
 
                   <div>
                     <div className="text-xs font-medium text-muted-foreground mb-2">Execution Logs (Node-by-Node)</div>
-                    <ScrollArea className="max-h-96 rounded-md border border-border bg-muted/30 p-4">
+                    <div className="rounded-md border border-border bg-muted/30 p-4">
                       {renderStructuredLogs(selectedExecution.logs)}
-                    </ScrollArea>
+                    </div>
                   </div>
 
                   <div>
