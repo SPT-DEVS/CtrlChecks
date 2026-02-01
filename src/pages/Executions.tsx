@@ -5,8 +5,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { ENDPOINTS } from '@/config/endpoints';
 import { 
   Search, Clock, CheckCircle, XCircle, Loader2, 
-  ChevronRight, RefreshCw, Filter, Edit 
+  ChevronRight, RefreshCw, Filter, Edit, User
 } from 'lucide-react';
+import { ProfileSettingsModal } from '@/components/ProfileSettingsModal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -20,12 +21,13 @@ type Execution = Tables<'executions'> & {
 };
 
 export default function Executions() {
-  const { user, loading: authLoading, signOut } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [executions, setExecutions] = useState<Execution[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -158,7 +160,11 @@ export default function Executions() {
           </div>
           <div className="flex items-center gap-4">
             <span className="text-sm text-muted-foreground">{user.email}</span>
-            <Button variant="outline" size="sm" onClick={() => signOut()}>Sign Out</Button>
+            <Button variant="outline" size="sm" onClick={() => setProfileModalOpen(true)}>
+              <User className="mr-2 h-4 w-4" />
+              Profile Settings
+            </Button>
+            <ProfileSettingsModal open={profileModalOpen} onOpenChange={setProfileModalOpen} />
           </div>
         </div>
       </header>

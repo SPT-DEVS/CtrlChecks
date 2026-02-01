@@ -31,6 +31,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useDroppable } from '@dnd-kit/core';
 import { useExpressionDropStore } from '@/stores/expressionDropStore';
 import { resolveExpression, detectExpressionType } from '@/lib/expressionResolver';
+import { InputGuideLink } from './InputGuideLink';
 
 // Droppable field wrapper component - MUST be outside PropertiesPanel to avoid hook violations
 interface DroppableFieldWrapperProps {
@@ -237,21 +238,38 @@ export default function PropertiesPanel({ onClose, debugMode = false, debugInput
       }
 
       const { data: sessionData } = await supabase.auth.getSession();
-      const response = await fetch(`${ENDPOINTS.itemBackend}/generate-workflow`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(sessionData?.session?.access_token
-            ? { Authorization: `Bearer ${sessionData.session.access_token}` }
-            : {}),
-        },
-        body: JSON.stringify({
-          prompt: userMessage.content.trim(),
-          mode: 'edit',
-          currentWorkflow: currentWorkflow,
-          executionHistory: executionHistory.length > 0 ? executionHistory : undefined,
-        }),
-      });
+      
+      // Add timeout to prevent indefinite hanging (120 seconds for AI generation)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 seconds
+      
+      let response: Response;
+      try {
+        response = await fetch(`${ENDPOINTS.itemBackend}/api/generate-workflow`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(sessionData?.session?.access_token
+              ? { Authorization: `Bearer ${sessionData.session.access_token}` }
+              : {}),
+          },
+          body: JSON.stringify({
+            prompt: userMessage.content.trim(),
+            mode: 'edit',
+            currentWorkflow: currentWorkflow,
+            executionHistory: executionHistory.length > 0 ? executionHistory : undefined,
+          }),
+          signal: controller.signal,
+        });
+        
+        clearTimeout(timeoutId);
+      } catch (fetchError: any) {
+        clearTimeout(timeoutId);
+        if (fetchError.name === 'AbortError') {
+          throw new Error('Request timed out. The AI generation is taking too long. Please try again with a simpler request.');
+        }
+        throw fetchError;
+      }
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({ error: 'AI edit failed' }));
@@ -260,13 +278,18 @@ export default function PropertiesPanel({ onClose, debugMode = false, debugInput
 
       const data = await response.json();
 
-      if (data && data.nodes && data.edges) {
-        const validated = validateAndFixWorkflow(data);
+      // Handle both response formats: direct nodes/edges or nested in workflow object
+      const workflowData = data.workflow || data;
+      const responseNodes = workflowData.nodes || data.nodes;
+      const responseEdges = workflowData.edges || data.edges;
+
+      if (responseNodes && responseEdges && Array.isArray(responseNodes) && Array.isArray(responseEdges)) {
+        const validated = validateAndFixWorkflow({ nodes: responseNodes, edges: responseEdges });
 
         setNodes(validated.nodes);
         setEdges(validated.edges);
 
-        const explanation = data.explanation || `I've updated the workflow based on your request.`;
+        const explanation = data.explanation || data.documentation || `I've updated the workflow based on your request.`;
         const historyNote = executionHistory.length > 0
           ? '\n\n💡 Used execution history to help debug and fix issues.'
           : '';
@@ -278,7 +301,8 @@ export default function PropertiesPanel({ onClose, debugMode = false, debugInput
           timestamp: new Date(),
         }]);
       } else {
-        throw new Error('Invalid response format');
+        console.error('Invalid response format:', data);
+        throw new Error(`Invalid response format. Expected nodes and edges, got: ${JSON.stringify(Object.keys(data))}`);
       }
 
     } catch (error: any) {
@@ -1052,16 +1076,28 @@ export default function PropertiesPanel({ onClose, debugMode = false, debugInput
                                 {renderField(field)}
 
                                 {/* Last - User Manual Link at Right Side End */}
-                                {hasHelpLink && (
+                                {/* MANDATORY: Show guide link for ALL input fields (per requirements) */}
+                                {(['text', 'textarea', 'json', 'number', 'select', 'time', 'cron'].includes(field.type)) && (
                                   <div className="flex justify-end">
-                                    <button
-                                      type="button"
-                                      onClick={() => setSelectedHelp(helpInfo)}
-                                      className="text-xs text-muted-foreground/70 hover:text-foreground/80 cursor-pointer flex items-center gap-1 transition-colors duration-150"
-                                    >
-                                      <HelpCircle className="h-3 w-3" />
-                                      How to get {field.label}?
-                                    </button>
+                                    {hasHelpLink ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => setSelectedHelp(helpInfo)}
+                                        className="text-xs text-muted-foreground/70 hover:text-foreground/80 cursor-pointer flex items-center gap-1 transition-colors duration-150"
+                                      >
+                                        <HelpCircle className="h-3 w-3" />
+                                        How to get {field.label}?
+                                      </button>
+                                    ) : (
+                                      <InputGuideLink
+                                        fieldKey={field.key}
+                                        fieldLabel={field.label}
+                                        fieldType={field.type}
+                                        nodeType={selectedNode.data.type}
+                                        placeholder={field.placeholder}
+                                        helpText={field.helpText}
+                                      />
+                                    )}
                                   </div>
                                 )}
                               </div>

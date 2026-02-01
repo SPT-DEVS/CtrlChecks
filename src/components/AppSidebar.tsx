@@ -16,6 +16,8 @@ import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/lib/auth";
 import { useRole } from "@/hooks/useRole";
 import { useNavigate } from "react-router-dom";
+import { ProfileSettingsModal } from "@/components/ProfileSettingsModal";
+import { useState } from "react";
 import {
   Sidebar,
   SidebarContent,
@@ -55,15 +57,11 @@ const settingsNavItems = [
 
 export function AppSidebar() {
   const { state } = useSidebar();
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
   const { canAccessAdmin } = useRole();
   const navigate = useNavigate();
   const collapsed = state === "collapsed";
-
-  const handleSignOut = async () => {
-    await signOut();
-    navigate("/");
-  };
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
 
   const userInitials = user?.email?.slice(0, 2).toUpperCase() || "U";
 
@@ -187,20 +185,17 @@ export function AppSidebar() {
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuItem onClick={() => navigate("/settings/profile")}>
+            <DropdownMenuItem onClick={() => setProfileModalOpen(true)}>
               <User className="mr-2 h-4 w-4" />
-              Profile
+              Profile Settings
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => navigate("/settings/api-keys")}>
               <Key className="mr-2 h-4 w-4" />
               API Keys
             </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleSignOut} className="text-destructive">
-              <LogOut className="mr-2 h-4 w-4" />
-              Sign out
-            </DropdownMenuItem>
           </DropdownMenuContent>
+        </DropdownMenu>
+        <ProfileSettingsModal open={profileModalOpen} onOpenChange={setProfileModalOpen} />
         </DropdownMenu>
       </SidebarFooter>
     </Sidebar>

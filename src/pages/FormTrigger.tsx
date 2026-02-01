@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { ENDPOINTS } from '@/config/endpoints';
 import { Loader2 } from 'lucide-react';
+import { GlassBlurLoader } from '@/components/ui/glass-blur-loader';
 
 interface FormField {
   name: string;
@@ -209,138 +210,141 @@ export default function FormTrigger() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 dark:from-gray-900 dark:to-gray-800 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-2xl mx-auto">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-8">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-            {formConfig.formTitle}
-          </h1>
-          {formConfig.formDescription && (
-            <p className="text-gray-600 dark:text-gray-300 mb-6">{formConfig.formDescription}</p>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {formConfig.fields.map((field) => {
-              // Create unique field ID using workflowId, nodeId, and field name to prevent duplicates
-              const fieldId = `form-${workflowId}-${nodeId}-${field.name}`;
-              return <div key={field.name} className="space-y-2">
-                  <label
-                    htmlFor={fieldId}
-                    className="block text-sm font-medium text-gray-700 dark:text-gray-200"
-                  >
-                    {field.label}
-                    {field.required && <span className="text-red-500 ml-1">*</span>}
-                  </label>
-
-                  {field.type === 'textarea' ? (
-                    <textarea
-                      id={fieldId}
-                      name={field.name}
-                      required={field.required}
-                      placeholder={field.placeholder}
-                      defaultValue={field.defaultValue}
-                      rows={4}
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark:bg-gray-700 dark:text-white"
-                    />
-                  ) : field.type === 'select' ? (
-                    <select
-                      id={fieldId}
-                      name={field.name}
-                      required={field.required}
-                      defaultValue={field.defaultValue}
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark:bg-gray-700 dark:text-white"
-                    >
-                      <option value="">Select...</option>
-                      {(field.options || []).map((opt) => {
-                        const value = typeof opt === 'string' ? opt : opt.value;
-                        const label = typeof opt === 'string' ? opt : opt.label;
-                        return (
-                          <option key={value} value={value}>
-                            {label}
-                          </option>
-                        );
-                      })}
-                    </select>
-                  ) : field.type === 'checkbox' ? (
-                    <input
-                      type="checkbox"
-                      id={fieldId}
-                      name={field.name}
-                      defaultChecked={field.defaultValue === 'true'}
-                      required={field.required}
-                      className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
-                    />
-                  ) : field.type === 'radio' ? (
-                    <div className="space-y-2">
-                      {(field.options || []).map((opt, idx) => {
-                        const value = typeof opt === 'string' ? opt : opt.value;
-                        const label = typeof opt === 'string' ? opt : opt.label;
-                        const radioId = `${fieldId}-${idx}-${value}`;
-                        return (
-                          <label key={idx} htmlFor={radioId} className="flex items-center space-x-2">
-                            <input
-                              type="radio"
-                              id={radioId}
-                              name={field.name}
-                              value={value}
-                              required={field.required && idx === 0}
-                              className="w-4 h-4 text-purple-600 border-gray-300 focus:ring-purple-500"
-                            />
-                            <span className="text-sm text-gray-700 dark:text-gray-200">{label}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  ) : field.type === 'file' ? (
-                    <input
-                      type="file"
-                      id={fieldId}
-                      name={field.name}
-                      required={field.required}
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark:bg-gray-700 dark:text-white"
-                    />
-                  ) : (
-                    <input
-                      type={field.type === 'email' ? 'email' : field.type === 'number' ? 'number' : field.type === 'tel' ? 'tel' : field.type === 'url' ? 'url' : field.type === 'date' ? 'date' : 'text'}
-                      id={fieldId}
-                      name={field.name}
-                      required={field.required}
-                      placeholder={field.placeholder}
-                      defaultValue={field.defaultValue}
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark:bg-gray-700 dark:text-white"
-                    />
-                  )}
-
-                {field.helpText && (
-                  <p className="text-xs text-gray-500 dark:text-gray-400">{field.helpText}</p>
-                )}
-              </div>;
-            })}
-
-            {submitError && (
-              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-4">
-                <p className="text-sm text-red-800 dark:text-red-200">{submitError}</p>
-              </div>
+    <>
+      {submitting && (
+        <GlassBlurLoader 
+          text="Submitting..." 
+          description="Please wait while we process your submission."
+        />
+      )}
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 dark:from-gray-900 dark:to-gray-800 py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-2xl mx-auto">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-8">
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+              {formConfig.formTitle}
+            </h1>
+            {formConfig.formDescription && (
+              <p className="text-gray-600 dark:text-gray-300 mb-6">{formConfig.formDescription}</p>
             )}
 
-            <button
-              type="submit"
-              disabled={submitting}
-              className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-semibold py-3 px-6 rounded-md shadow-lg transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-            >
-              {submitting ? (
-                <span className="flex items-center justify-center">
-                  <Loader2 className="h-5 w-5 animate-spin mr-2" />
-                  Submitting...
-                </span>
-              ) : (
-                formConfig.submitButtonText
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {formConfig.fields.map((field) => {
+                // Create unique field ID using workflowId, nodeId, and field name to prevent duplicates
+                const fieldId = `form-${workflowId}-${nodeId}-${field.name}`;
+                return (
+                  <div key={field.name} className="space-y-2">
+                    <label
+                      htmlFor={fieldId}
+                      className="block text-sm font-medium text-gray-700 dark:text-gray-200"
+                    >
+                      {field.label}
+                      {field.required && <span className="text-red-500 ml-1">*</span>}
+                    </label>
+
+                    {field.type === 'textarea' ? (
+                      <textarea
+                        id={fieldId}
+                        name={field.name}
+                        required={field.required}
+                        placeholder={field.placeholder}
+                        defaultValue={field.defaultValue}
+                        rows={4}
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark:bg-gray-700 dark:text-white"
+                      />
+                    ) : field.type === 'select' ? (
+                      <select
+                        id={fieldId}
+                        name={field.name}
+                        required={field.required}
+                        defaultValue={field.defaultValue}
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark:bg-gray-700 dark:text-white"
+                      >
+                        <option value="">Select...</option>
+                        {(field.options || []).map((opt) => {
+                          const value = typeof opt === 'string' ? opt : opt.value;
+                          const label = typeof opt === 'string' ? opt : opt.label;
+                          return (
+                            <option key={value} value={value}>
+                              {label}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    ) : field.type === 'checkbox' ? (
+                      <input
+                        type="checkbox"
+                        id={fieldId}
+                        name={field.name}
+                        defaultChecked={field.defaultValue === 'true'}
+                        required={field.required}
+                        className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+                      />
+                    ) : field.type === 'radio' ? (
+                      <div className="space-y-2">
+                        {(field.options || []).map((opt, idx) => {
+                          const value = typeof opt === 'string' ? opt : opt.value;
+                          const label = typeof opt === 'string' ? opt : opt.label;
+                          const radioId = `${fieldId}-${idx}-${value}`;
+                          return (
+                            <label key={idx} htmlFor={radioId} className="flex items-center space-x-2">
+                              <input
+                                type="radio"
+                                id={radioId}
+                                name={field.name}
+                                value={value}
+                                required={field.required && idx === 0}
+                                className="w-4 h-4 text-purple-600 border-gray-300 focus:ring-purple-500"
+                              />
+                              <span className="text-sm text-gray-700 dark:text-gray-200">{label}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    ) : field.type === 'file' ? (
+                      <input
+                        type="file"
+                        id={fieldId}
+                        name={field.name}
+                        required={field.required}
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark:bg-gray-700 dark:text-white"
+                      />
+                    ) : (
+                      <input
+                        type={field.type === 'email' ? 'email' : field.type === 'number' ? 'number' : field.type === 'tel' ? 'tel' : field.type === 'url' ? 'url' : field.type === 'date' ? 'date' : 'text'}
+                        id={fieldId}
+                        name={field.name}
+                        required={field.required}
+                        placeholder={field.placeholder}
+                        defaultValue={field.defaultValue}
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark:bg-gray-700 dark:text-white"
+                      />
+                    )}
+
+                    {field.helpText && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400">{field.helpText}</p>
+                    )}
+                  </div>
+                );
+              })}
+
+              {submitError && (
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-4">
+                  <p className="text-sm text-red-800 dark:text-red-200">{submitError}</p>
+                </div>
               )}
-            </button>
-          </form>
+
+              <button
+                type="submit"
+                disabled={submitting}
+                className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-semibold py-3 px-6 rounded-md shadow-lg transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+              >
+                {formConfig.submitButtonText}
+              </button>
+            </form>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
 

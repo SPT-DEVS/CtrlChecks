@@ -4,8 +4,10 @@ import { useAuth } from "@/lib/auth";
 import { useRole } from "@/hooks/useRole";
 import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/integrations/supabase/client";
-import { Zap, Plus, Play, FolderOpen, LayoutTemplate, History, Settings, MoreHorizontal, Copy, Trash2, Clock, Bot, Workflow, MessageSquare, Sparkles, Wrench, ArrowLeft, Sun, Moon, Activity } from "lucide-react";
+import { Zap, Plus, Play, FolderOpen, LayoutTemplate, History, Settings, MoreHorizontal, Copy, Trash2, Clock, Bot, Workflow, MessageSquare, Sparkles, Wrench, ArrowLeft, Sun, Moon, Activity, User } from "lucide-react";
 import ConnectionsPanel from "@/components/ConnectionsPanel";
+import GoogleConnectionStatus from "@/components/GoogleConnectionStatus";
+import { ProfileSettingsModal } from "@/components/ProfileSettingsModal";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -27,7 +29,7 @@ type Workflow = Tables<'workflows'> & {
 };
 
 export default function Dashboard() {
-  const { user, loading, signOut } = useAuth();
+  const { user, loading } = useAuth();
   const { canAccessAdmin } = useRole();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
@@ -40,6 +42,7 @@ export default function Dashboard() {
   });
   const [showCreateOptions, setShowCreateOptions] = useState(false);
   const [filterActive, setFilterActive] = useState(false);
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
 
   // Suppress 406 errors from executions queries (expected when workflows have no executions)
   useEffect(() => {
@@ -443,7 +446,11 @@ export default function Dashboard() {
               </Button>
             )}
             <span className="text-sm text-muted-foreground hidden md:inline">{user.email}</span>
-            <Button variant="outline" size="sm" onClick={() => signOut()}>Sign Out</Button>
+            <Button variant="outline" size="sm" onClick={() => setProfileModalOpen(true)}>
+              <User className="mr-2 h-4 w-4" />
+              Profile Settings
+            </Button>
+            <ProfileSettingsModal open={profileModalOpen} onOpenChange={setProfileModalOpen} />
           </div>
         </div>
       </header>

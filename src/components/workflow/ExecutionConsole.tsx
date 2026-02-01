@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { Json } from '@/integrations/supabase/types';
+import ExecutionLogBlock from './ExecutionLogBlock';
 
 interface Execution {
   id: string;
@@ -278,7 +279,7 @@ export default function ExecutionConsole({ isExpanded, onToggle }: ExecutionCons
     return `${(ms / 1000).toFixed(2)}s`;
   };
 
-  // Render structured logs instead of formatted string
+  // Render structured logs using block-wise UI
   const renderStructuredLogs = (logs: Json | null) => {
     if (!logs) {
       const isRunning = selectedExecution?.status === 'running' || selectedExecution?.status === 'waiting';
@@ -297,7 +298,18 @@ export default function ExecutionConsole({ isExpanded, onToggle }: ExecutionCons
     }
 
     if (Array.isArray(logs)) {
+      const validLogs = logs.filter((log: any) => typeof log === 'object' && log !== null);
+      
+      if (validLogs.length === 0) {
+        return (
+          <div className="text-sm text-muted-foreground p-4 text-center">
+            No valid execution logs found
+          </div>
+        );
+      }
+
       return (
+<<<<<<< HEAD
         <div className="space-y-4">
           {logs.map((log: any, i: number) => {
             if (typeof log !== 'object' || log === null) {
@@ -348,97 +360,31 @@ export default function ExecutionConsole({ isExpanded, onToggle }: ExecutionCons
               ? new Date(log.finishedAt).getTime() - new Date(log.startedAt).getTime()
               : null;
 
-            return (
-              <div 
-                key={i} 
-                className={`p-4 rounded-lg border-2 ${statusColor} transition-all hover:shadow-md`}
-              >
-                {/* Node Header */}
-                <div className="flex items-center justify-between mb-3 pb-2 border-b border-current/20">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-muted-foreground">#{i + 1}</span>
-                    <h4 className="font-semibold text-sm">{nodeName}</h4>
-                    <Badge 
-                      variant="outline" 
-                      className={`text-xs ${
-                        status === 'success' ? 'bg-green-500/10 text-green-500 border-green-500/30' :
-                        status === 'failed' ? 'bg-red-500/10 text-red-500 border-red-500/30' :
-                        status === 'running' ? 'bg-blue-500/10 text-blue-500 border-blue-500/30' :
-                        'bg-muted text-muted-foreground'
-                      }`}
-                    >
-                      {status.toUpperCase()}
-                    </Badge>
-                  </div>
-                  {duration !== null && (
-                    <span className="text-xs text-muted-foreground">
-                      {duration < 1000 ? `${duration}ms` : `${(duration / 1000).toFixed(2)}s`}
-                    </span>
-                  )}
-                </div>
-
-                {/* Timestamps */}
-                <div className="grid grid-cols-2 gap-2 mb-3 text-xs text-muted-foreground">
-                  {log.startedAt && (
-                    <div>
-                      <span className="font-medium">Started:</span>{' '}
-                      {new Date(log.startedAt).toLocaleTimeString()}
-                    </div>
-                  )}
-                  {log.finishedAt && (
-                    <div>
-                      <span className="font-medium">Finished:</span>{' '}
-                      {new Date(log.finishedAt).toLocaleTimeString()}
-                    </div>
-                  )}
-                </div>
-
-                {/* Input Section */}
-                {log.input !== undefined && (
-                  <div className="mb-3">
-                    <div className="text-xs font-semibold text-muted-foreground mb-1 flex items-center gap-1">
-                      📥 INPUT
-                    </div>
-                    <pre className="p-2 rounded bg-background/50 border border-border/50 text-xs font-mono overflow-x-auto max-h-40 overflow-y-auto">
-                      {JSON.stringify(log.input, null, 2)}
-                    </pre>
-                  </div>
-                )}
-
-                {/* Output Section */}
-                {log.output !== undefined && log.output !== null ? (
-                  <div className="mb-3">
-                    <div className="text-xs font-semibold text-muted-foreground mb-1 flex items-center gap-1">
-                      📤 OUTPUT
-                    </div>
-                    <pre className="p-2 rounded bg-background/50 border border-border/50 text-xs font-mono overflow-x-auto max-h-40 overflow-y-auto">
-                      {JSON.stringify(log.output, null, 2)}
-                    </pre>
-                  </div>
-                ) : log.status === 'success' ? (
-                  <div className="mb-3 text-xs text-muted-foreground italic">
-                    📤 OUTPUT: (null or empty)
-                  </div>
-                ) : null}
-
-                {/* Error Section */}
-                {log.error && (
-                  <div className="mt-3 pt-3 border-t border-current/20">
-                    <div className="text-xs font-semibold text-red-500 mb-1 flex items-center gap-1">
-                      ❌ ERROR
-                    </div>
-                    <pre className="p-2 rounded bg-red-500/10 border border-red-500/20 text-xs font-mono text-red-400 whitespace-pre-wrap break-words">
-                      {log.error}
-                    </pre>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+        <div className="space-y-0">
+          {validLogs.map((log: any, i: number) => (
+            <ExecutionLogBlock
+              key={log.nodeId || i}
+              log={{
+                nodeId: log.nodeId || `node-${i}`,
+                nodeName: log.nodeName || log.nodeId || `Node ${i + 1}`,
+                nodeType: log.nodeType,
+                status: log.status || 'unknown',
+                startedAt: log.startedAt || log.started_at || new Date().toISOString(),
+                finishedAt: log.finishedAt || log.finished_at,
+                input: log.input,
+                output: log.output,
+                error: log.error,
+              }}
+              index={i}
+              totalNodes={validLogs.length}
+              isLast={i === validLogs.length - 1}
+            />
+          ))}
         </div>
       );
     }
 
+    // Fallback for non-array logs
     return (
       <pre className="p-3 rounded-md bg-muted/50 text-xs font-mono overflow-x-auto">
         {JSON.stringify(logs, null, 2)}
@@ -535,10 +481,9 @@ export default function ExecutionConsole({ isExpanded, onToggle }: ExecutionCons
           </div>
 
           {/* Execution Details */}
-          <div className="flex-1 overflow-hidden">
-            <ScrollArea className="h-full">
-              {selectedExecution ? (
-                <div className="p-4 space-y-4">
+          <div className="flex-1 overflow-y-auto">
+            {selectedExecution ? (
+              <div className="p-4 space-y-4">
                   <div className="flex items-center gap-3">
                     <Badge variant="outline" className={getStatusColor(selectedExecution.status)}>
                       {selectedExecution.status}
@@ -632,7 +577,6 @@ export default function ExecutionConsole({ isExpanded, onToggle }: ExecutionCons
                   Select an execution to view details
                 </div>
               )}
-            </ScrollArea>
           </div>
         </div>
       )}

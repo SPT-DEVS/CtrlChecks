@@ -146,21 +146,38 @@ export default function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
             });
 
             const { data: sessionData } = await supabase.auth.getSession();
-            const response = await fetch(`${ENDPOINTS.itemBackend}/generate-workflow`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(sessionData?.session?.access_token
-                        ? { Authorization: `Bearer ${sessionData.session.access_token}` }
-                        : {}),
-                },
-                body: JSON.stringify({
-                    prompt: userMessage.content.trim(),
-                    mode: 'edit',
-                    currentWorkflow: currentWorkflow,
-                    executionHistory: executionHistory.length > 0 ? executionHistory : undefined,
-                }),
-            });
+            
+            // Add timeout to prevent indefinite hanging (120 seconds for AI generation)
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 seconds
+            
+            let response: Response;
+            try {
+                response = await fetch(`${ENDPOINTS.itemBackend}/api/generate-workflow`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(sessionData?.session?.access_token
+                            ? { Authorization: `Bearer ${sessionData.session.access_token}` }
+                            : {}),
+                    },
+                    body: JSON.stringify({
+                        prompt: userMessage.content.trim(),
+                        mode: 'edit',
+                        currentWorkflow: currentWorkflow,
+                        executionHistory: executionHistory.length > 0 ? executionHistory : undefined,
+                    }),
+                    signal: controller.signal,
+                });
+                
+                clearTimeout(timeoutId);
+            } catch (fetchError: any) {
+                clearTimeout(timeoutId);
+                if (fetchError.name === 'AbortError') {
+                    throw new Error('Request timed out. The AI generation is taking too long. Please try again with a simpler request.');
+                }
+                throw fetchError;
+            }
 
             if (!response.ok) {
                 const error = await response.json().catch(() => ({ error: 'AI edit failed' }));
@@ -170,14 +187,19 @@ export default function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
 
             const data = await response.json();
 
-            if (data && data.nodes && data.edges) {
+            // Handle both response formats: direct nodes/edges or nested in workflow object
+            const workflowData = data.workflow || data;
+            const responseNodes = workflowData.nodes || data.nodes;
+            const responseEdges = workflowData.edges || data.edges;
+
+            if (responseNodes && responseEdges && Array.isArray(responseNodes) && Array.isArray(responseEdges)) {
                 // Normalize nodes to include label, category, icon, etc.
-                const validated = validateAndFixWorkflow(data);
+                const validated = validateAndFixWorkflow({ nodes: responseNodes, edges: responseEdges });
                 
                 setNodes(validated.nodes);
                 setEdges(validated.edges);
 
-                const explanation = data.explanation || `I've updated the workflow based on your request.`;
+                const explanation = data.explanation || data.documentation || `I've updated the workflow based on your request.`;
                 const historyNote = hasExecutionHistory 
                     ? '\n\n💡 Used execution history to help debug and fix issues.' 
                     : '';
@@ -189,7 +211,8 @@ export default function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
                     timestamp: new Date(),
                 }]);
             } else {
-                throw new Error('Invalid response format');
+                console.error('Invalid response format:', data);
+                throw new Error(`Invalid response format. Expected nodes and edges, got: ${JSON.stringify(Object.keys(data))}`);
             }
 
         } catch (error: any) {
