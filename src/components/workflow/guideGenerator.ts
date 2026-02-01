@@ -521,6 +521,96 @@ function generateURLGuide(nodeType: string, fieldKey: string, fieldLabel: string
 }
 
 function generateCredentialGuide(nodeType: string, fieldLabel: string): FieldGuide {
+  // Check if this is a database credential
+  const isDatabaseCredential = fieldLabel.toLowerCase().includes('database') || 
+                               nodeType?.toLowerCase().includes('postgres') ||
+                               nodeType?.toLowerCase().includes('mysql') ||
+                               nodeType?.toLowerCase().includes('mongo') ||
+                               nodeType?.toLowerCase().includes('sql') ||
+                               nodeType?.toLowerCase().includes('timescale') ||
+                               nodeType?.toLowerCase().includes('database');
+  
+  if (isDatabaseCredential) {
+    return {
+      title: 'How to get DATABASE CREDENTIALS?',
+      steps: [
+        'Step 1: Identify Your Database Type',
+        '   Determine which database you\'re using:',
+        '   • PostgreSQL / TimescaleDB',
+        '   • MySQL / MariaDB',
+        '   • MongoDB',
+        '   • Microsoft SQL Server',
+        '   • SQLite',
+        '   • Other (Redis, Cassandra, etc.)',
+        '',
+        'Step 2: Access Database Management Interface',
+        '   For Cloud Databases (AWS RDS, Google Cloud SQL, Azure):',
+        '   • Log in to your cloud provider console',
+        '   • Navigate to Database Services section',
+        '   • Select your database instance',
+        '   • Go to "Connection" or "Credentials" tab',
+        '',
+        '   For Self-Hosted Databases:',
+        '   • Connect via database client (pgAdmin, MySQL Workbench, etc.)',
+        '   • Or access via command line (psql, mysql, mongo)',
+        '   • Or check your application configuration files',
+        '',
+        'Step 3: Locate Connection Credentials',
+        '   You need these details:',
+        '   • Host/Server: Database server address (e.g., localhost, db.example.com)',
+        '   • Port: Database port number (PostgreSQL: 5432, MySQL: 3306, MongoDB: 27017)',
+        '   • Database Name: Specific database to connect to',
+        '   • Username: Database user account name',
+        '   • Password: Database user password',
+        '',
+        'Step 4: Get Username and Password',
+        '   For New Databases:',
+        '   • Create user: CREATE USER myuser WITH PASSWORD \'mypassword\';',
+        '   • Grant permissions: GRANT ALL PRIVILEGES ON DATABASE mydb TO myuser;',
+        '',
+        '   For Existing Databases:',
+        '   • Check with your database administrator',
+        '   • Review application configuration files (.env, config.yml)',
+        '   • Check cloud provider\'s credential management',
+        '',
+        'Step 5: For Cloud Databases',
+        '   AWS RDS:',
+        '   • Go to RDS Dashboard → Your Database → Configuration',
+        '   • Master username and password are set during creation',
+        '   • Or use IAM database authentication',
+        '',
+        '   Google Cloud SQL:',
+        '   • Go to SQL → Your Instance → Users',
+        '   • Create or view existing users',
+        '   • Reset password if needed',
+        '',
+        '   Azure SQL Database:',
+        '   • Go to SQL Server → Your Server → SQL databases',
+        '   • Use server admin credentials or create contained database users',
+        '',
+        'Step 6: Security Best Practices',
+        '   • Use strong, unique passwords',
+        '   • Create dedicated users with minimal required permissions',
+        '   • Never use root/admin accounts for applications',
+        '   • Store credentials in environment variables or secret managers',
+        '   • Enable SSL/TLS encryption for connections',
+        '   • Rotate credentials regularly',
+        '',
+        'Step 7: Enter Credentials',
+        '   • Copy each credential value exactly as shown',
+        '   • Usernames and database names are often case-sensitive',
+        '   • Passwords may contain special characters - copy carefully',
+        '   • Test connection before saving',
+        '',
+        '⚠️ Security Warning:',
+        '   Never commit database credentials to version control.',
+        '   Use environment variables or secure vaults for production.'
+      ],
+      securityWarning: true
+    };
+  }
+  
+  // Generic credential guide for non-database credentials
   return {
     title: `How to get ${fieldLabel}?`,
     steps: [
