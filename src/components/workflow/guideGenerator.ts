@@ -26,6 +26,47 @@ export function generateFieldGuide(
   const lowerPlaceholder = (placeholder || '').toLowerCase();
   const combined = `${lowerKey} ${lowerLabel} ${lowerPlaceholder}`;
   
+  // CRITICAL: Check for Slack Bot Token FIRST (before any other checks)
+  // This ensures the specific Slack guide is used instead of generic token guide
+  if ((lowerLabel.includes('slack') && (lowerLabel.includes('bot token') || lowerLabel.includes('bot_token'))) ||
+      (lowerKey.includes('slack') && (lowerKey.includes('bot_token') || lowerKey.includes('bottoken'))) ||
+      (combined.includes('slack') && (combined.includes('bot token') || combined.includes('bot_token')))) {
+    return {
+      title: 'How to get Slack Bot Token?',
+      url: 'https://api.slack.com/apps',
+      steps: [
+        'Step 1: Go to https://api.slack.com/apps',
+        'Step 2: Sign in with your Slack workspace account',
+        'Step 3: Click "Create New App" button (or select an existing app)',
+        'Step 4: Choose "From scratch" option',
+        'Step 5: Enter an app name (e.g., "Workflow Bot") and select your workspace',
+        'Step 6: Click "Create App"',
+        'Step 7: In the left sidebar, click "OAuth & Permissions"',
+        'Step 8: Scroll down to "Scopes" section → "Bot Token Scopes"',
+        'Step 9: Click "Add an OAuth Scope" and add required scopes:',
+        '   • chat:write (to send messages)',
+        '   • channels:read (to read channel info)',
+        '   • channels:history (to read message history, if needed)',
+        'Step 10: Scroll up to the top of the page',
+        'Step 11: Click "Install to Workspace" button',
+        'Step 12: Review permissions and click "Allow" to authorize',
+        'Step 13: After installation, you\'ll see "Bot User OAuth Token"',
+        'Step 14: Click "Copy" next to the token (starts with xoxb-)',
+        'Step 15: Paste the token into the input field above',
+        '',
+        'Token format:',
+        'xoxb-XXXXXXXXXX-XXXXXXXXXXXXX-XXXXXXXXXXXXXXXXXXXXXXXX',
+        '',
+        '⚠️ Security Warning:',
+        '• Keep your Bot Token secret - never share it publicly',
+        '• If exposed, regenerate it immediately in Slack app settings',
+        '• Use environment variables for production workflows'
+      ],
+      example: 'xoxb-XXXXXXXXXX-XXXXXXXXXXXXX-XXXXXXXXXXXXXXXXXXXXXXXX',
+      securityWarning: true
+    };
+  }
+  
   // CRITICAL: Check fieldLabel directly (not lowercased) for URLs first
   // This handles cases where fieldLabel IS the URL (e.g., "https://api.twitter.com/1.1/?")
   if (fieldLabel.includes('api.twitter.com') || fieldLabel.includes('https://api.twitter.com') || 
@@ -328,6 +369,43 @@ export function generateFieldGuide(
 function generateAPIKeyGuide(nodeType: string, fieldLabel: string): FieldGuide {
   const lowerLabel = fieldLabel.toLowerCase();
   
+  // Check for Gemini API Key (most specific first)
+  if (lowerLabel.includes('gemini') && (lowerLabel.includes('api key') || lowerLabel.includes('api_key'))) {
+    return {
+      title: 'How to get Gemini API Key?',
+      url: 'https://aistudio.google.com/apikey',
+      steps: [
+        'Step 1: Go to https://aistudio.google.com/apikey',
+        'Step 2: Sign in with your Google account',
+        'Step 3: Click "Get API key" or "Create API key" button',
+        'Step 4: Select "Create API key in new project" or choose an existing project',
+        'Step 5: If creating new project:',
+        '   • Enter a project name (e.g., "Workflow Automation")',
+        '   • Click "Create"',
+        'Step 6: Your API key will be generated and displayed',
+        'Step 7: Click "Copy" to copy the API key immediately',
+        'Step 8: Paste the API key into the input field above',
+        '',
+        'Important Notes:',
+        '• The API key starts with "AIza"',
+        '• You can only see the full key once - copy it immediately',
+        '• If you lose it, you\'ll need to create a new one',
+        '• API keys are free but have usage limits',
+        '',
+        'Token format:',
+        'AIzaSyDxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+        '',
+        '⚠️ Security Warning:',
+        '• Keep your API key secret - never share it publicly',
+        '• Do not commit API keys to version control',
+        '• Use environment variables for production workflows',
+        '• If exposed, delete and regenerate the key immediately'
+      ],
+      example: 'AIzaSyDxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+      securityWarning: true
+    };
+  }
+  
   // Check for specific services in fieldLabel
   if (lowerLabel.includes('google sheets') || lowerLabel.includes('sheets api')) {
     return {
@@ -356,6 +434,45 @@ function generateAPIKeyGuide(nodeType: string, fieldLabel: string): FieldGuide {
     };
   }
   
+  // Check for Slack Bot Token (most specific first)
+  if (lowerLabel.includes('slack') && (lowerLabel.includes('bot token') || lowerLabel.includes('bot_token'))) {
+    return {
+      title: 'How to get Slack Bot Token?',
+      url: 'https://api.slack.com/apps',
+      steps: [
+        'Step 1: Go to https://api.slack.com/apps',
+        'Step 2: Sign in with your Slack workspace account',
+        'Step 3: Click "Create New App" button (or select an existing app)',
+        'Step 4: Choose "From scratch" option',
+        'Step 5: Enter an app name (e.g., "Workflow Bot") and select your workspace',
+        'Step 6: Click "Create App"',
+        'Step 7: In the left sidebar, click "OAuth & Permissions"',
+        'Step 8: Scroll down to "Scopes" section → "Bot Token Scopes"',
+        'Step 9: Click "Add an OAuth Scope" and add required scopes:',
+        '   • chat:write (to send messages)',
+        '   • channels:read (to read channel info)',
+        '   • channels:history (to read message history, if needed)',
+        'Step 10: Scroll up to the top of the page',
+        'Step 11: Click "Install to Workspace" button',
+        'Step 12: Review permissions and click "Allow" to authorize',
+        'Step 13: After installation, you\'ll see "Bot User OAuth Token"',
+        'Step 14: Click "Copy" next to the token (starts with xoxb-)',
+        'Step 15: Paste the token into the input field above',
+        '',
+        'Token format:',
+        'xoxb-XXXXXXXXXX-XXXXXXXXXXXXX-XXXXXXXXXXXXXXXXXXXXXXXX',
+        '',
+        '⚠️ Security Warning:',
+        '• Keep your Bot Token secret - never share it publicly',
+        '• If exposed, regenerate it immediately in Slack app settings',
+        '• Use environment variables for production workflows'
+      ],
+      example: 'xoxb-XXXXXXXXXX-XXXXXXXXXXXXX-XXXXXXXXXXXXXXXXXXXXXXXX',
+      securityWarning: true
+    };
+  }
+  
+  // Check for Slack API (general)
   if (lowerLabel.includes('slack') && lowerLabel.includes('api')) {
     return {
       title: 'How to get Slack API?',
@@ -387,21 +504,35 @@ function generateAPIKeyGuide(nodeType: string, fieldLabel: string): FieldGuide {
   const guides: Record<string, FieldGuide> = {
     google_gemini: {
       title: 'How to get Gemini API Key?',
-      url: 'https://aistudio.google.com',
+      url: 'https://aistudio.google.com/apikey',
       steps: [
-        'Step 1: Go to https://aistudio.google.com',
-        'Step 2: Login with your Google account',
-        'Step 3: Click "Get API key"',
-        'Step 4: Create or select a Google Cloud project',
-        'Step 5: Click "Create API key"',
-        'Step 6: Copy the generated key',
+        'Step 1: Go to https://aistudio.google.com/apikey',
+        'Step 2: Sign in with your Google account',
+        'Step 3: Click "Get API key" or "Create API key" button',
+        'Step 4: Select "Create API key in new project" or choose an existing project',
+        'Step 5: If creating new project:',
+        '   • Enter a project name (e.g., "Workflow Automation")',
+        '   • Click "Create"',
+        'Step 6: Your API key will be generated and displayed',
+        'Step 7: Click "Copy" to copy the API key immediately',
+        'Step 8: Paste the API key into the input field above',
         '',
-        'Example:',
-        'AIzaSyDxxxxxxxxxxxxx',
+        'Important Notes:',
+        '• The API key starts with "AIza"',
+        '• You can only see the full key once - copy it immediately',
+        '• If you lose it, you\'ll need to create a new one',
+        '• API keys are free but have usage limits',
         '',
-        '⚠️ Do not expose this key in frontend code. Store it securely.'
+        'Token format:',
+        'AIzaSyDxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+        '',
+        '⚠️ Security Warning:',
+        '• Keep your API key secret - never share it publicly',
+        '• Do not commit API keys to version control',
+        '• Use environment variables for production workflows',
+        '• If exposed, delete and regenerate the key immediately'
       ],
-      example: 'AIzaSyDxxxxxxxxxxxxx',
+      example: 'AIzaSyDxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
       securityWarning: true
     },
     openai_gpt: {
@@ -1770,7 +1901,46 @@ function generateGenericGuide(fieldLabel: string, fieldType: string): FieldGuide
     };
   }
   
+  // Check for Slack (general, not webhook)
   if (lowerLabel.includes('slack') && !lowerLabel.includes('webhook')) {
+    // If it's a token field, use the detailed Bot Token guide
+    if (lowerLabel.includes('token') || lowerKey.includes('token')) {
+      return {
+        title: 'How to get Slack Bot Token?',
+        url: 'https://api.slack.com/apps',
+        steps: [
+          'Step 1: Go to https://api.slack.com/apps',
+          'Step 2: Sign in with your Slack workspace account',
+          'Step 3: Click "Create New App" button (or select an existing app)',
+          'Step 4: Choose "From scratch" option',
+          'Step 5: Enter an app name (e.g., "Workflow Bot") and select your workspace',
+          'Step 6: Click "Create App"',
+          'Step 7: In the left sidebar, click "OAuth & Permissions"',
+          'Step 8: Scroll down to "Scopes" section → "Bot Token Scopes"',
+          'Step 9: Click "Add an OAuth Scope" and add required scopes:',
+          '   • chat:write (to send messages)',
+          '   • channels:read (to read channel info)',
+          '   • channels:history (to read message history, if needed)',
+          'Step 10: Scroll up to the top of the page',
+          'Step 11: Click "Install to Workspace" button',
+          'Step 12: Review permissions and click "Allow" to authorize',
+          'Step 13: After installation, you\'ll see "Bot User OAuth Token"',
+          'Step 14: Click "Copy" next to the token (starts with xoxb-)',
+          'Step 15: Paste the token into the input field above',
+          '',
+          'Token format:',
+          'xoxb-XXXXXXXXXX-XXXXXXXXXXXXX-XXXXXXXXXXXXXXXXXXXXXXXX',
+          '',
+          '⚠️ Security Warning:',
+          '• Keep your Bot Token secret - never share it publicly',
+          '• If exposed, regenerate it immediately in Slack app settings',
+          '• Use environment variables for production workflows'
+        ],
+        example: 'xoxb-XXXXXXXXXX-XXXXXXXXXXXXX-XXXXXXXXXXXXXXXXXXXXXXXX',
+        securityWarning: true
+      };
+    }
+    // Otherwise use general Slack API guide
     return {
       title: 'How to get Slack API?',
       url: 'https://api.slack.com/apps',

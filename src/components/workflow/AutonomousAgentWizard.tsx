@@ -271,6 +271,20 @@ export function AutonomousAgentWizard() {
         }
     };
 
+    // Normalize credential names to avoid duplicates (e.g., SLACK_TOKEN vs SLACK_BOT_TOKEN)
+    const normalizeCredentialName = (name: string): string => {
+        const upper = name.toUpperCase();
+        // Normalize Slack token variations to SLACK_BOT_TOKEN
+        if (upper.includes('SLACK') && upper.includes('TOKEN') && !upper.includes('WEBHOOK')) {
+            return 'SLACK_BOT_TOKEN';
+        }
+        // Normalize Slack webhook variations
+        if (upper.includes('SLACK') && upper.includes('WEBHOOK')) {
+            return 'SLACK_WEBHOOK_URL';
+        }
+        return upper;
+    };
+    
     // Identify required credentials from requirements and answers
     const identifyRequiredCredentials = (requirements: any, answers: Record<string, string>): string[] => {
         const credentials: string[] = [];
@@ -328,41 +342,54 @@ export function AutonomousAgentWizard() {
         } else if (answerValues.some(v => v.includes('claude') || v.includes('anthropic'))) {
             credentials.push('ANTHROPIC_API_KEY');
             console.log('✅ [Frontend] Added ANTHROPIC_API_KEY');
-        } else if (answerValues.some(v => v.includes('gemini') || v.includes('google'))) {
+        } else if (answerValues.some(v => v.includes('gemini'))) {
+            // Only ask for Gemini API Key if explicitly mentioned (not for Google Sheets/Gmail)
             credentials.push('GEMINI_API_KEY');
             console.log('✅ [Frontend] Added GEMINI_API_KEY (from provider selection)');
         } else if (hasAIFunctionality) {
             // If AI functionality is detected but no specific provider selected, default to Gemini
+            // Only if AI functionality is actually needed (not just Google Sheets/Gmail)
             credentials.push('GEMINI_API_KEY');
             console.log('✅ [Frontend] Added GEMINI_API_KEY (default for AI functionality)');
         }
         
         // Check for output channels
         if (answerValues.some(v => v.includes('slack'))) {
-            credentials.push('SLACK_TOKEN', 'SLACK_WEBHOOK_URL');
+            // Only ask for Slack Bot Token (not redundant SLACK_TOKEN or SLACK_WEBHOOK_URL)
+            // Check if normalized version already exists
+            const slackTokenNormalized = normalizeCredentialName('SLACK_BOT_TOKEN');
+            if (!credentials.some(c => normalizeCredentialName(c) === slackTokenNormalized)) {
+                credentials.push('SLACK_BOT_TOKEN');
+            }
         } else if (answerValues.some(v => v.includes('discord'))) {
-            credentials.push('DISCORD_WEBHOOK_URL');
+            if (!credentials.includes('DISCORD_WEBHOOK_URL')) {
+                credentials.push('DISCORD_WEBHOOK_URL');
+            }
         } else if (answerValues.some(v => v.includes('email') || v.includes('smtp'))) {
-            credentials.push('SMTP_HOST', 'SMTP_USERNAME', 'SMTP_PASSWORD');
+            // Only ask for SMTP if not using Gmail (Gmail uses pre-connected OAuth)
+            if (!answerValues.some(v => v.includes('gmail'))) {
+                if (!credentials.includes('SMTP_HOST')) credentials.push('SMTP_HOST');
+                if (!credentials.includes('SMTP_USERNAME')) credentials.push('SMTP_USERNAME');
+                if (!credentials.includes('SMTP_PASSWORD')) credentials.push('SMTP_PASSWORD');
+            }
+            // For Gmail, sender account is selected from connected accounts (handled in UI)
         }
         
-        // Check for Google services
-        if (answerValues.some(v => v.includes('google')) || 
-            (requirements.platforms && requirements.platforms.some((p: any) => 
-                typeof p === 'string' ? p.toLowerCase().includes('google') : 
-                (p.name || p.type || '').toLowerCase().includes('google')
-            ))) {
-            if (!credentials.includes('GEMINI_API_KEY')) {
-                credentials.push('GEMINI_API_KEY');
-            }
-        }
+        // Google services (Sheets, Gmail, Drive) are pre-connected via OAuth
+        // Do NOT ask for Google OAuth credentials - they are already configured
+        // Only check for Gemini API Key if AI functionality is actually needed
         
         // Check requirements for credential hints
         if (requirements.credentials && Array.isArray(requirements.credentials)) {
             requirements.credentials.forEach((cred: any) => {
                 const credName = typeof cred === 'string' ? cred : (cred.name || cred.type || '');
-                if (credName && !credentials.includes(credName.toUpperCase())) {
-                    credentials.push(credName.toUpperCase());
+                if (credName) {
+                    const normalized = normalizeCredentialName(credName);
+                    // Check if normalized version already exists
+                    if (!credentials.includes(normalized) && 
+                        !credentials.some(c => normalizeCredentialName(c) === normalized)) {
+                        credentials.push(normalized);
+                    }
                 }
             });
         }
@@ -376,14 +403,25 @@ export function AutonomousAgentWizard() {
                     if (!credentials.includes('OPENAI_API_KEY')) credentials.push('OPENAI_API_KEY');
                 } else if (apiLower.includes('claude') || apiLower.includes('anthropic')) {
                     if (!credentials.includes('ANTHROPIC_API_KEY')) credentials.push('ANTHROPIC_API_KEY');
-                } else if (apiLower.includes('gemini') || apiLower.includes('google')) {
+                } else if (apiLower.includes('gemini')) {
+                    // Only ask for Gemini API Key if explicitly mentioned (not for Google Sheets/Gmail)
                     if (!credentials.includes('GEMINI_API_KEY')) credentials.push('GEMINI_API_KEY');
                 }
+                // Google Sheets/Gmail APIs don't require Gemini API Key - they use OAuth
             });
         }
         
-        const finalCredentials = [...new Set(credentials)]; // Remove duplicates
-        console.log('🎯 [Frontend] Final identified credentials:', finalCredentials);
+        // Final deduplication with normalization
+        const normalizedCreds = new Map<string, string>();
+        credentials.forEach(cred => {
+            const normalized = normalizeCredentialName(cred);
+            if (!normalizedCreds.has(normalized)) {
+                normalizedCreds.set(normalized, cred);
+            }
+        });
+        
+        const finalCredentials = Array.from(normalizedCreds.values());
+        console.log('🎯 [Frontend] Final identified credentials (deduplicated):', finalCredentials);
         return finalCredentials;
     };
 
@@ -416,8 +454,8 @@ export function AutonomousAgentWizard() {
             let detectedCredentials: string[] = [];
             
             if (data.requiredCredentials && Array.isArray(data.requiredCredentials) && data.requiredCredentials.length > 0) {
-                // Backend has already identified credentials
-                detectedCredentials = data.requiredCredentials;
+                // Backend has already identified credentials - normalize them
+                detectedCredentials = data.requiredCredentials.map((cred: string) => normalizeCredentialName(cred));
                 console.log('🔑 Backend identified required credentials:', detectedCredentials);
             } else if (data.requirements) {
                 // Fallback: identify from requirements (frontend detection)
@@ -427,9 +465,18 @@ export function AutonomousAgentWizard() {
                 console.log('💬 Answers:', answers);
             }
             
-            // Always set credentials (even if empty array)
-            setRequiredCredentials(detectedCredentials);
-            console.log('✅ Set requiredCredentials to:', detectedCredentials);
+            // Final deduplication with normalization
+            const normalizedCreds = new Map<string, string>();
+            detectedCredentials.forEach((cred: string) => {
+                const normalized = normalizeCredentialName(cred);
+                if (!normalizedCreds.has(normalized)) {
+                    normalizedCreds.set(normalized, normalized); // Use normalized name
+                }
+            });
+            
+            const uniqueCredentials = Array.from(normalizedCreds.values());
+            setRequiredCredentials(uniqueCredentials);
+            console.log('✅ Set requiredCredentials to (deduplicated & normalized):', uniqueCredentials);
             
             setStep('confirmation');
             // Ensure step 3 is visible after refinement loads
@@ -597,18 +644,36 @@ export function AutonomousAgentWizard() {
                             const isCompleted = update.status === 'completed' || update.status === 'success' || update.success === true || (hasNodes && hasEdges);
                             
                             // Check for required credentials BEFORE completion
-                            if (update.requiredCredentials && Array.isArray(update.requiredCredentials) && update.requiredCredentials.length > 0) {
+                            // CRITICAL: Only check on first update, not after credentials have been provided
+                            // This prevents refresh loop where workflow keeps asking for credentials
+                            if (update.requiredCredentials && 
+                                Array.isArray(update.requiredCredentials) && 
+                                update.requiredCredentials.length > 0 && 
+                                step === 'building' && 
+                                !showCredentialStep && 
+                                Object.keys(credentialValues).length === 0) {
+                                
                                 const missingCreds = update.requiredCredentials.filter((cred: string) => {
                                     // Check if credential is provided in config
                                     const credLower = cred.toLowerCase();
-                                    const provided = Object.keys(config).some(key => 
-                                        key.toLowerCase().includes(credLower.replace(/_/g, '').replace(/api|key|token/gi, ''))
-                                    );
-                                    return !provided;
+                                    const normalizedCred = cred.replace(/_/g, '').toLowerCase();
+                                    
+                                    // Check in config (normalized credentials)
+                                    const inConfig = Object.keys(config).some(key => {
+                                        const keyLower = key.toLowerCase();
+                                        return keyLower === credLower || 
+                                               keyLower === normalizedCred ||
+                                               keyLower.includes(normalizedCred.replace(/api|key|token/gi, ''));
+                                    });
+                                    
+                                    return !inConfig;
                                 });
                                 
+                                // Only show credentials step if we have missing creds AND haven't shown it before
                                 if (missingCreds.length > 0) {
-                                    setRequiredCredentials(missingCreds);
+                                    // Deduplicate credentials before setting
+                                    const uniqueMissingCreds = [...new Set(missingCreds)];
+                                    setRequiredCredentials(uniqueMissingCreds);
                                     setShowCredentialStep(true);
                                     setStep('credentials'); // New step for credential collection
                                     stopFallbackProgress();
@@ -616,6 +681,7 @@ export function AutonomousAgentWizard() {
                                     return; // Don't complete yet, wait for credentials
                                 }
                             }
+                            // If credentials were already provided or step is not 'building', continue with workflow generation
                             
                             if (isCompleted) {
                                 // Stop fallback progress
@@ -796,15 +862,81 @@ export function AutonomousAgentWizard() {
             stopFallbackProgress();
             setProgress(100);
             setIsComplete(true);
-            setStep('complete');
+            
+            // Only set to complete if we have a saved workflow, otherwise stay in building
+            if (workflowSaved && generatedWorkflowId) {
+                setStep('complete');
+            } else if (finalData && (finalData.nodes || finalData.workflow?.nodes)) {
+                // We have workflow data, try to save it one more time
+                const workflowNodes = finalData.nodes || finalData.workflow?.nodes;
+                const workflowEdges = finalData.edges || finalData.workflow?.edges;
+                
+                if (workflowNodes && workflowEdges && !workflowSaved) {
+                    try {
+                        const { data: { user } } = await supabase.auth.getUser();
+                        const normalized = validateAndFixWorkflow({ nodes: workflowNodes, edges: workflowEdges });
+
+                        const workflowData = {
+                            name: (analysis?.summary && typeof analysis.summary === 'string') 
+                                ? analysis.summary.substring(0, 50) 
+                                : 'AI Generated Workflow',
+                            nodes: normalized.nodes,
+                            edges: normalized.edges,
+                            user_id: user?.id,
+                            updated_at: new Date().toISOString(),
+                        };
+
+                        const { data: savedWorkflow, error: saveError } = await supabase
+                            .from('workflows')
+                            .insert(workflowData)
+                            .select()
+                            .single();
+
+                        if (!saveError && savedWorkflow?.id) {
+                            setGeneratedWorkflowId(savedWorkflow.id);
+                            setNodes(normalized.nodes);
+                            setEdges(normalized.edges);
+                            setStep('complete');
+                        } else {
+                            console.error('Final save attempt failed:', saveError);
+                            setStep('complete'); // Still show completion even if save failed
+                        }
+                    } catch (finalSaveErr) {
+                        console.error('Final save error:', finalSaveErr);
+                        setStep('complete'); // Still show completion
+                    }
+                } else {
+                    setStep('complete');
+                }
+            } else {
+                // No workflow data, something went wrong
+                console.error('No workflow data available for completion');
+                setStep('complete'); // Still show completion screen
+            }
 
         } catch (err: any) {
             // Clean up fallback progress on error
             stopFallbackProgress();
 
-            console.error(err);
-            toast({ title: 'Build Failed', description: err.message, variant: 'destructive' });
-            setStep('confirmation');
+            console.error('Workflow generation error:', err);
+            
+            // Don't go back to confirmation if we're already past that step
+            // Instead, show error but stay on current step or go to a safe state
+            if (step === 'building' || step === 'credentials') {
+                toast({ 
+                    title: 'Build Failed', 
+                    description: err.message || 'Failed to generate workflow. Please try again.', 
+                    variant: 'destructive' 
+                });
+                // Go back to confirmation step so user can retry
+                setStep('confirmation');
+            } else {
+                toast({ 
+                    title: 'Error', 
+                    description: err.message || 'An error occurred. Please try again.', 
+                    variant: 'destructive' 
+                });
+            }
         }
     };
 
@@ -1066,7 +1198,7 @@ export function AutonomousAgentWizard() {
                                         </CardDescription>
                                     </CardHeader>
                                     <CardContent className="space-y-4">
-                                        {requiredCredentials.map((cred, i) => {
+                                        {[...new Set(requiredCredentials)].map((cred, i) => {
                                             const credKey = cred.toLowerCase().replace(/_/g, '_');
                                             const credLabel = cred.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
                                             const isPassword = cred.toLowerCase().includes('key') || 
@@ -1175,7 +1307,7 @@ export function AutonomousAgentWizard() {
                                         </CardDescription>
                                     </CardHeader>
                                     <CardContent className="space-y-4">
-                                        {requiredCredentials.map((cred, i) => {
+                                        {[...new Set(requiredCredentials)].map((cred, i) => {
                                             const credKey = cred.toLowerCase().replace(/_/g, '_');
                                             const credLabel = cred.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
                                             const isPassword = cred.toLowerCase().includes('key') || 
@@ -1185,7 +1317,10 @@ export function AutonomousAgentWizard() {
                                             
                                             // Determine field type for guide
                                             let fieldType = 'credential';
-                                            if (cred.toLowerCase().includes('webhook') && cred.toLowerCase().includes('url')) {
+                                            if (cred.toLowerCase().includes('slack') && 
+                                                (cred.toLowerCase().includes('bot_token') || cred.toLowerCase().includes('bot token'))) {
+                                                fieldType = 'token'; // Set to 'token' to trigger proper guide generation
+                                            } else if (cred.toLowerCase().includes('webhook') && cred.toLowerCase().includes('url')) {
                                                 fieldType = 'webhook_url';
                                             } else if (cred.toLowerCase().includes('url')) {
                                                 fieldType = 'url';
@@ -1193,6 +1328,8 @@ export function AutonomousAgentWizard() {
                                                 fieldType = 'oauth';
                                             } else if (cred.toLowerCase().includes('smtp')) {
                                                 fieldType = 'smtp';
+                                            } else if (cred.toLowerCase().includes('token')) {
+                                                fieldType = 'token';
                                             }
                                             
                                             return (
