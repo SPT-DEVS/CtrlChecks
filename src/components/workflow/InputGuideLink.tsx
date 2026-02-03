@@ -11,6 +11,12 @@ function detectGuideType(key: string, label: string, type?: string): 'api_key' |
   const lowerLabel = label.toLowerCase();
   const combined = `${lowerKey} ${lowerLabel}`;
 
+  // Check for specific services first (before generic types)
+  if ((combined.includes('slack') && combined.includes('bot token')) || 
+      (combined.includes('slack') && combined.includes('bot_token'))) {
+    return 'custom'; // Use custom to trigger generateFieldGuide which has specific Slack guide
+  }
+  
   if (combined.includes('api key') || combined.includes('apikey') || combined.includes('api_key')) {
     return 'api_key';
   }
@@ -82,7 +88,14 @@ export function InputGuideLink({ fieldKey, fieldLabel, fieldType, nodeType, clas
   const helpTextGuide = hasHelpTextSteps ? parseHelpTextToGuide(helpText, fieldLabel) : null;
   
   // Generate field guide if no node-specific guide or helpText guide exists
-  // Pass placeholder to help with detection of specific URLs/services
+  // ALWAYS generate guide for Slack Bot Token to ensure correct guide is shown
+  const isSlackBotToken = (fieldLabel.toLowerCase().includes('slack') && 
+                           (fieldLabel.toLowerCase().includes('bot token') || 
+                            fieldLabel.toLowerCase().includes('bot_token'))) ||
+                          (fieldKey.toLowerCase().includes('slack') && 
+                           (fieldKey.toLowerCase().includes('bot_token') || 
+                            fieldKey.toLowerCase().includes('bottoken')));
+  
   const generatedGuide = !nodeGuide && !helpTextGuide ? generateFieldGuide(
     nodeType || '',
     fieldKey,
