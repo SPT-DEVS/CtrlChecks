@@ -79,6 +79,7 @@ export const workflowAPI = {
       const response = await api.get('/health');
       return response;
     } catch (error: any) {
+      // Return error info without logging (client.ts handles logging)
       return {
         status: 'unreachable',
         error: error.message || 'Unknown error',

@@ -1,3 +1,6 @@
+# Default nginx configuration for CtrlChecks Frontend
+# For custom domain setup, copy this to nginx.conf and update YOUR_DOMAIN.com
+
 server {
     listen 80;
     server_name _;
@@ -33,4 +36,3 @@ server {
         add_header Cache-Control "no-cache, no-store, must-revalidate";
     }
 }
-

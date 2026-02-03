@@ -488,7 +488,7 @@ function generateURLGuide(nodeType: string, fieldKey: string, fieldLabel: string
       title: 'How to get Webhook URL?',
       steps: [
         'Step 1: Identify where you want to receive webhook data',
-        'Step 2: For local testing: Use a service like ngrok (https://ngrok.com)',
+        'Step 2: Use your server\'s public URL',
         'Step 3: For production: Use your server\'s public URL',
         'Step 4: The webhook URL format is: https://your-domain.com/webhook/endpoint',
         'Step 5: Copy the complete URL including protocol (http:// or https://)',
@@ -1219,7 +1219,7 @@ function generateWebhookURLGuide(nodeType: string, fieldLabel: string): FieldGui
     title: `How to get ${fieldLabel}?`,
     steps: [
       'Step 1: Identify where you want to receive webhook data',
-      'Step 2: For local testing: Use a service like ngrok (https://ngrok.com)',
+      'Step 2: Use your server\'s public URL',
       'Step 3: For production: Use your server\'s public URL',
       'Step 4: The webhook URL format is: https://your-domain.com/webhook/endpoint',
       'Step 5: Copy the complete URL including protocol (http:// or https://)',

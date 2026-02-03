@@ -43,13 +43,17 @@ export default function ConnectionsPanel() {
       }
 
       // Check LinkedIn connection
-      const { data: linkedInData } = await supabase
+      const { data: linkedInData, error: linkedInError } = await supabase
         .from('linkedin_oauth_tokens' as any)
         .select('id, expires_at')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle(); // Use maybeSingle() to handle empty results gracefully
 
-      if (linkedInData) {
+      // Handle 406 errors gracefully (RLS blocking when no tokens exist)
+      if (linkedInError && linkedInError.code !== 'PGRST116' && !linkedInError.message?.includes('406')) {
+        console.error('Error checking LinkedIn connection:', linkedInError);
+        setLinkedInConnected(false);
+      } else if (linkedInData) {
         const expiresAt = linkedInData.expires_at ? new Date(linkedInData.expires_at) : null;
         const now = new Date();
         setLinkedInConnected(expiresAt ? expiresAt > now : true);

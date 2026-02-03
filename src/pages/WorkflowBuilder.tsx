@@ -78,9 +78,24 @@ export default function WorkflowBuilder() {
           edges: data.edges || []
         });
 
+        // CRITICAL: Validate edges before setting
+        const validEdges = normalized.edges.filter(edge => {
+          const sourceExists = normalized.nodes.some(n => n.id === edge.source);
+          const targetExists = normalized.nodes.some(n => n.id === edge.target);
+          
+          if (!sourceExists || !targetExists) {
+            console.warn(`[EdgeValidation] Removing invalid edge on load: ${edge.source}->${edge.target}`);
+            return false;
+          }
+          return true;
+        });
+
+        console.log(`[EdgeDebug] Loaded ${validEdges.length} valid edges from ${normalized.edges.length} total edges`);
+        console.log(`[EdgeDebug] Loaded ${normalized.nodes.length} nodes`);
+
         // CRITICAL: Set nodes and edges atomically to prevent partial state
         setNodes(normalized.nodes);
-        setEdges(normalized.edges);
+        setEdges(validEdges);
         setIsDirty(false);
         
         toast({
@@ -133,10 +148,24 @@ export default function WorkflowBuilder() {
 
     setIsSaving(true);
     try {
+      // Validate edges before saving
+      const validEdges = edges.filter(edge => {
+        const sourceExists = nodes.some(n => n.id === edge.source);
+        const targetExists = nodes.some(n => n.id === edge.target);
+        
+        if (!sourceExists || !targetExists) {
+          console.warn(`[EdgeValidation] Removing invalid edge on save: ${edge.source}->${edge.target}`);
+          return false;
+        }
+        return true;
+      });
+
+      console.log(`[EdgeDebug] Saving ${validEdges.length} valid edges (from ${edges.length} total)`);
+
       const workflowData = {
         name: useWorkflowStore.getState().workflowName,
         nodes: nodes as unknown as Json,
-        edges: edges as unknown as Json,
+        edges: validEdges as unknown as Json, // Ensure edges included
         user_id: user.id,
         updated_at: new Date().toISOString(),
       };
