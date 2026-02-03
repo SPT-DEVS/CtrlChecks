@@ -47,7 +47,7 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       // Production optimizations
-      minify: isProduction ? 'esbuild' : false,
+      minify: isProduction ? 'terser' : false,
       sourcemap: !isProduction,
       rollupOptions: {
         output: {

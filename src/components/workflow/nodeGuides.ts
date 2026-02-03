@@ -879,7 +879,6 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
         '',
         '5️⃣ For Webhooks',
         '   Use your server\'s public URL',
-        '   Or use ngrok for local testing',
         '   Format: https://your-domain.com/webhook',
         '',
         '6️⃣ Verify the URL',

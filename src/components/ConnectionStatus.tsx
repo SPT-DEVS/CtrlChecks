@@ -35,6 +35,7 @@ export function ConnectionStatus() {
         setBackendStatus('disconnected');
       }
     } catch (error) {
+      // Silently handle errors - client.ts handles logging
       setBackendStatus('disconnected');
     }
   }

@@ -22,7 +22,9 @@ FROM nginx:alpine
 COPY --from=builder /app/dist /usr/share/nginx/html
 
 # Copy nginx configuration
+# Priority: nginx.conf (custom domain) > nginx.conf.example (default)
 COPY nginx.conf.example /etc/nginx/conf.d/default.conf
+# If nginx.conf exists, it will override the example (mount as volume or copy separately)
 
 # Expose port
 EXPOSE 80

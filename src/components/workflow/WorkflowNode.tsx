@@ -130,13 +130,14 @@ const WorkflowNode = memo(({ data, selected, id }: NodeProps<WorkflowNodeProps>)
       {/* AI Agent has multiple input ports with labels */}
       {isAIAgentNode ? (
         <>
-          {/* Left side: General input handle with visual indicator */}
+          {/* Left side: General input handle with visual indicator (for userInput) */}
           <div className="absolute left-0 top-1/2 transform -translate-y-1/2 -translate-x-1/2 flex items-center pointer-events-none z-0">
             <Plus className="h-2 w-2 text-muted-foreground/50 mr-0.5" />
             <div className="w-2 h-px bg-border/40"></div>
           </div>
           <Handle
             type="target"
+            id="userInput"
             position={Position.Left}
             className="!w-3 !h-3 !bg-muted-foreground !border-2 !border-background"
             style={{ top: '50%', transform: 'translateY(-50%)' }}
@@ -230,6 +231,7 @@ const WorkflowNode = memo(({ data, selected, id }: NodeProps<WorkflowNodeProps>)
         <>
           <Handle
             type="target"
+            id="input"
             position={Position.Top}
             className="!w-3 !h-3 !bg-muted-foreground !border-2 !border-background"
           />
@@ -337,6 +339,7 @@ const WorkflowNode = memo(({ data, selected, id }: NodeProps<WorkflowNodeProps>)
       ) : isAIAgentNode ? null : (
         <Handle
           type="source"
+          id="output"
           position={Position.Bottom}
           className="!w-3 !h-3 !bg-muted-foreground !border-2 !border-background"
         />

@@ -34,9 +34,20 @@ export default function LinkedInConnectionStatus({
         .from('linkedin_oauth_tokens' as any)
         .select('id, expires_at')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle(); // Use maybeSingle() instead of single() to handle empty results gracefully
 
-      if (error || !data) {
+      // Handle 406 errors gracefully (RLS blocking when no tokens exist)
+      if (error) {
+        // 406 means "Not Acceptable" - usually means no rows exist or RLS blocked
+        // Treat it as "not authenticated" rather than an error
+        if (error.code === 'PGRST116' || error.message?.includes('406')) {
+          setIsAuthenticated(false);
+        } else {
+          console.error('Error checking LinkedIn auth status:', error);
+          setIsAuthenticated(false);
+        }
+      } else if (!data) {
+        // No token exists
         setIsAuthenticated(false);
       } else {
         // Check if token is expired

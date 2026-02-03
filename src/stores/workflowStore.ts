@@ -97,8 +97,49 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   },
 
   onConnect: (connection) => {
+    const { nodes } = get();
+    const targetNode = nodes.find(n => n.id === connection.target);
+    const sourceNode = nodes.find(n => n.id === connection.source);
+    
+    // CRITICAL FIX: Preserve the actual targetHandle from React Flow connection
+    // This ensures connections to specific ports (like AI Agent's userInput) work correctly
+    // Only use defaults if handle IDs are truly missing
+    let targetHandle = connection.targetHandle;
+    let sourceHandle = connection.sourceHandle;
+    
+    // For AI Agent nodes, preserve the specific port handle (userInput, chat_model, memory, tool)
+    if (targetNode?.data?.type === 'ai_agent') {
+      // If targetHandle is provided (from React Flow), use it
+      // Otherwise, default to 'userInput' for left-side port
+      if (!targetHandle) {
+        targetHandle = 'userInput'; // Default to left-side port
+      }
+    } else {
+      // For other nodes, use default if not provided
+      if (!targetHandle) {
+        targetHandle = 'input';
+      }
+    }
+    
+    // For source handle, use provided or default to 'output'
+    if (!sourceHandle) {
+      sourceHandle = 'output';
+    }
+    
+    const connectionWithHandles = {
+      ...connection,
+      sourceHandle,
+      targetHandle,
+    };
+    
+    console.log(`[WorkflowStore] Connection: ${sourceNode?.data?.type || connection.source} → ${targetNode?.data?.type || connection.target}`, {
+      sourceHandle,
+      targetHandle,
+      originalTargetHandle: connection.targetHandle
+    });
+    
     set({
-      edges: addEdge(connection, get().edges),
+      edges: addEdge(connectionWithHandles, get().edges),
       isDirty: true,
     });
   },
@@ -108,8 +149,35 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     // Save state for undo
     const newUndoStack = [...get().undoStack, { nodes: [...nodes], edges: [...edges] }];
 
+    const targetNode = nodes.find(n => n.id === newConnection.target);
+    
+    // CRITICAL FIX: Preserve the actual targetHandle from React Flow connection
+    let targetHandle = newConnection.targetHandle;
+    let sourceHandle = newConnection.sourceHandle;
+    
+    // For AI Agent nodes, preserve the specific port handle
+    if (targetNode?.data?.type === 'ai_agent') {
+      if (!targetHandle) {
+        targetHandle = 'userInput'; // Default to left-side port
+      }
+    } else {
+      if (!targetHandle) {
+        targetHandle = 'input';
+      }
+    }
+    
+    if (!sourceHandle) {
+      sourceHandle = 'output';
+    }
+
+    const connectionWithHandles = {
+      ...newConnection,
+      sourceHandle,
+      targetHandle,
+    };
+
     set({
-      edges: addEdge(newConnection, edges.filter((e) => e.id !== oldEdge.id)),
+      edges: addEdge(connectionWithHandles, edges.filter((e) => e.id !== oldEdge.id)),
       isDirty: true,
       undoStack: newUndoStack,
       redoStack: [],

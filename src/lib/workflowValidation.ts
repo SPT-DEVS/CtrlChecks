@@ -35,6 +35,105 @@ function generateUniqueId(prefix: string, existingIds: Set<string>): string {
     return id;
 }
 
+// Simple hierarchical layout algorithm for positioning nodes
+function applyHierarchicalLayout(nodes: any[], edges: any[]): any[] {
+    const nodeMap = new Map<string, any>();
+    const children = new Map<string, string[]>();
+    const levels = new Map<string, number>();
+    const nodePositions = new Map<string, { x: number; y: number }>();
+    
+    // Build node map and children relationships
+    nodes.forEach(node => {
+        nodeMap.set(node.id, node);
+        children.set(node.id, []);
+    });
+    
+    edges.forEach(edge => {
+        const childList = children.get(edge.source) || [];
+        childList.push(edge.target);
+        children.set(edge.source, childList);
+    });
+    
+    // Find root nodes (nodes with no incoming edges)
+    const rootNodes = nodes.filter(node => {
+        return !edges.some(e => e.target === node.id);
+    });
+    
+    // Calculate levels using BFS
+    const queue: string[] = [];
+    rootNodes.forEach(node => {
+        levels.set(node.id, 0);
+        queue.push(node.id);
+    });
+    
+    while (queue.length > 0) {
+        const currentId = queue.shift()!;
+        const currentLevel = levels.get(currentId) || 0;
+        const childList = children.get(currentId) || [];
+        
+        childList.forEach(childId => {
+            const existingLevel = levels.get(childId);
+            if (existingLevel === undefined || existingLevel < currentLevel + 1) {
+                levels.set(childId, currentLevel + 1);
+                queue.push(childId);
+            }
+        });
+    }
+    
+    // Group nodes by level
+    const nodesByLevel = new Map<number, string[]>();
+    levels.forEach((level, nodeId) => {
+        if (!nodesByLevel.has(level)) {
+            nodesByLevel.set(level, []);
+        }
+        nodesByLevel.get(level)!.push(nodeId);
+    });
+    
+    // Position nodes level by level
+    const nodeWidth = 250;
+    const nodeHeight = 150;
+    const horizontalSpacing = 300;
+    const verticalSpacing = 200;
+    
+    let maxNodesInLevel = 0;
+    nodesByLevel.forEach(nodeIds => {
+        maxNodesInLevel = Math.max(maxNodesInLevel, nodeIds.length);
+    });
+    
+    const startX = -(maxNodesInLevel * horizontalSpacing) / 2;
+    
+    nodesByLevel.forEach((nodeIds, level) => {
+        const y = level * verticalSpacing + 100;
+        const levelWidth = nodeIds.length * horizontalSpacing;
+        const startXForLevel = startX + (maxNodesInLevel - nodeIds.length) * horizontalSpacing / 2;
+        
+        nodeIds.forEach((nodeId, index) => {
+            const x = startXForLevel + index * horizontalSpacing;
+            nodePositions.set(nodeId, { x, y });
+        });
+    });
+    
+    // Apply positions to nodes - preserve existing valid positions, use layout for others
+    return nodes.map(node => {
+        const hasValidPosition = node.position && 
+                                 typeof node.position === 'object' && 
+                                 typeof node.position.x === 'number' && 
+                                 typeof node.position.y === 'number';
+        
+        if (hasValidPosition) {
+            // Preserve existing position
+            return node;
+        }
+        
+        // Use calculated layout position
+        const layoutPosition = nodePositions.get(node.id);
+        return {
+            ...node,
+            position: layoutPosition || { x: 0, y: 0 }
+        };
+    });
+}
+
 // Regenerate all node and edge IDs to ensure global uniqueness
 function regenerateAllIds(nodes: any[], edges: any[]): { nodes: any[], edges: any[] } {
     const nodeIdMap = new Map<string, string>();
@@ -43,6 +142,14 @@ function regenerateAllIds(nodes: any[], edges: any[]): { nodes: any[], edges: an
     // First pass: generate new IDs for all nodes
     const regeneratedNodes = nodes.map((node: any) => {
         const oldId = node.id;
+        if (!oldId) {
+            // If node has no ID, generate one
+            const newId = generateUniqueId('node', existingIds);
+            return {
+                ...node,
+                id: newId
+            };
+        }
         const newId = generateUniqueId('node', existingIds);
         nodeIdMap.set(oldId, newId);
         return {
@@ -51,19 +158,29 @@ function regenerateAllIds(nodes: any[], edges: any[]): { nodes: any[], edges: an
         };
     });
     
-    // Second pass: update edges with new node IDs
-    const regeneratedEdges = edges.map((edge: any) => {
-        const newSourceId = nodeIdMap.get(edge.source) || edge.source;
-        const newTargetId = nodeIdMap.get(edge.target) || edge.target;
-        const newEdgeId = generateUniqueId('edge', existingIds);
-        
-        return {
-            ...edge,
-            id: newEdgeId,
-            source: newSourceId,
-            target: newTargetId
-        };
-    });
+    // Second pass: update edges with new node IDs, only keep edges with valid source/target
+    const regeneratedEdges = edges
+        .filter((edge: any) => {
+            // Only keep edges where both source and target exist in the nodeIdMap
+            const hasSource = edge.source && nodeIdMap.has(edge.source);
+            const hasTarget = edge.target && nodeIdMap.has(edge.target);
+            return hasSource && hasTarget;
+        })
+        .map((edge: any) => {
+            const newSourceId = nodeIdMap.get(edge.source)!;
+            const newTargetId = nodeIdMap.get(edge.target)!;
+            const newEdgeId = generateUniqueId('edge', existingIds);
+            
+            return {
+                ...edge,
+                id: newEdgeId,
+                source: newSourceId,
+                target: newTargetId,
+                // Preserve handle IDs for proper connection
+                sourceHandle: edge.sourceHandle,
+                targetHandle: edge.targetHandle,
+            };
+        });
     
     return { nodes: regeneratedNodes, edges: regeneratedEdges };
 }
@@ -196,12 +313,85 @@ export function validateAndFixWorkflow(data: any): { nodes: any[], edges: any[],
 
     // 1. Regenerate ALL IDs to ensure global uniqueness (prevents collisions from backend)
     const { nodes: regeneratedNodes, edges: regeneratedEdges } = regenerateAllIds(nodes, edges);
-    nodes = regeneratedNodes.map((node: any, index: number) => ({
-        ...node,
-        position: node.position || { x: index * 200, y: 0 },
-        data: node.data || {},
-    }));
-    edges = regeneratedEdges;
+    
+    // Check which nodes need positioning
+    const nodesNeedingPosition = regeneratedNodes.filter((node: any) => {
+        const hasValidPosition = node.position && 
+                                 typeof node.position === 'object' && 
+                                 typeof node.position.x === 'number' && 
+                                 typeof node.position.y === 'number';
+        return !hasValidPosition;
+    });
+    
+    // If any nodes need positioning and we have edges, apply hierarchical layout
+    // Otherwise, use simple linear positioning
+    if (nodesNeedingPosition.length > 0 && regeneratedEdges.length > 0) {
+        // Apply hierarchical layout to nodes without positions
+        const positionedNodes = applyHierarchicalLayout(regeneratedNodes, regeneratedEdges);
+        nodes = positionedNodes.map((node: any) => ({
+            ...node,
+            data: node.data || {},
+        }));
+    } else {
+        // Preserve original positions - only set default if position is truly missing
+        nodes = regeneratedNodes.map((node: any, index: number) => {
+            // Check if position exists and is valid (has x and y properties)
+            const hasValidPosition = node.position && 
+                                     typeof node.position === 'object' && 
+                                     typeof node.position.x === 'number' && 
+                                     typeof node.position.y === 'number';
+            
+            return {
+                ...node,
+                position: hasValidPosition ? node.position : { x: index * 250, y: 100 },
+                data: node.data || {},
+            };
+        });
+    }
+    
+    // Ensure edges preserve handle IDs and are properly connected
+    // Add default handle IDs if missing (for regular nodes: "output" -> "input")
+    edges = regeneratedEdges.map((edge: any) => {
+        // Determine default handles based on node types
+        const sourceNode = nodes.find((n: any) => n.id === edge.source);
+        const targetNode = nodes.find((n: any) => n.id === edge.target);
+        
+        let defaultSourceHandle = edge.sourceHandle;
+        let defaultTargetHandle = edge.targetHandle;
+        
+        // If sourceHandle is missing, determine based on source node type
+        if (!defaultSourceHandle && sourceNode) {
+            const sourceType = sourceNode.data?.type;
+            if (sourceType === 'if_else') {
+                // If/Else nodes need explicit true/false handles - don't set default
+                defaultSourceHandle = undefined;
+            } else if (sourceType === 'switch') {
+                // Switch nodes need case-specific handles - don't set default
+                defaultSourceHandle = undefined;
+            } else {
+                // Regular nodes use "output" handle
+                defaultSourceHandle = 'output';
+            }
+        }
+        
+        // If targetHandle is missing, determine based on target node type
+        if (!defaultTargetHandle && targetNode) {
+            const targetType = targetNode.data?.type;
+            if (targetType === 'ai_agent') {
+                // AI Agent nodes have specific input handles - don't set default
+                defaultTargetHandle = undefined;
+            } else {
+                // Regular nodes use "input" handle
+                defaultTargetHandle = 'input';
+            }
+        }
+        
+        return {
+            ...edge,
+            sourceHandle: edge.sourceHandle || defaultSourceHandle,
+            targetHandle: edge.targetHandle || defaultTargetHandle,
+        };
+    });
 
     // 2. Fix Orphan Nodes (Auto-wire if simple, else leave for warning)
     // For now, we won't auto-wire arbitrary orphans as it's risky.

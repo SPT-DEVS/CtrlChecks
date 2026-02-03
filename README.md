@@ -212,6 +212,40 @@ docker build -f Dockerfile.prod -t ctrlchecks-frontend .
 docker run -p 8080:80 ctrlchecks-frontend
 ```
 
+### Nginx with Custom Domain
+
+To deploy with your own domain and SSL/HTTPS:
+
+1. **Quick Setup** (PowerShell):
+   ```powershell
+   .\scripts\setup-nginx-domain.ps1 -Domain "yourdomain.com"
+   ```
+
+2. **Manual Setup**:
+   - Copy `nginx.conf.example` to `nginx.conf`
+   - Replace `YOUR_DOMAIN.com` with your domain (3 occurrences)
+   - Set up SSL certificate with Let's Encrypt:
+     ```bash
+     sudo certbot --nginx -d yourdomain.com -d www.yourdomain.com
+     ```
+
+3. **Deploy with Docker**:
+   ```bash
+   docker run -d \
+     --name ctrlchecks-frontend \
+     -p 80:80 -p 443:443 \
+     -v $(pwd)/nginx.conf:/etc/nginx/conf.d/default.conf:ro \
+     -v /etc/letsencrypt:/etc/letsencrypt:ro \
+     ctrlchecks-frontend
+   ```
+
+4. **Update Environment Variables**:
+   ```env
+   VITE_PUBLIC_BASE_URL=https://yourdomain.com
+   ```
+
+See `nginx-setup-guide.md` for detailed instructions and troubleshooting.
+
 ## Testing
 
 ```bash

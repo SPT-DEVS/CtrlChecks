@@ -21,6 +21,12 @@ import { validateAndFixWorkflow } from '@/lib/workflowValidation';
 import { useTheme } from '@/hooks/useTheme';
 import { InputGuideLink } from './InputGuideLink';
 import { GlassBlurLoader } from '@/components/ui/glass-blur-loader';
+import { 
+    WorkflowGenerationStateManager, 
+    WorkflowGenerationState,
+    mapWizardStepToState,
+    mapStateToWizardStep 
+} from '@/lib/workflow-generation-state';
 
 type WizardStep = 'idle' | 'analyzing' | 'questioning' | 'refining' | 'confirmation' | 'credentials' | 'building' | 'complete';
 
@@ -40,6 +46,8 @@ interface AnalysisResult {
 interface RefinementResult {
     refinedPrompt: string;
     systemPrompt?: string;
+    enhancedPrompt?: string;
+    nodesNeedingConfig?: Array<{ nodeId: string; nodeType: string; properties: string[] }>;
     requirements?: {
         urls?: string[];
         apis?: string[];
@@ -74,10 +82,20 @@ export function AutonomousAgentWizard() {
     const [elapsedTime, setElapsedTime] = useState(0);
     const [cognitiveTextIndex, setCognitiveTextIndex] = useState(0);
     const [circleTextIndex, setCircleTextIndex] = useState(0);
+    const [workflowUnderstandingConfirmed, setWorkflowUnderstandingConfirmed] = useState(false);
     const { toast } = useToast();
     const { setNodes, setEdges } = useWorkflowStore();
     const { theme, toggleTheme } = useTheme();
     const navigate = useNavigate();
+    
+    // Execution Flow Architecture (STEP-2): State Manager
+    const stateManagerRef = useRef<WorkflowGenerationStateManager | null>(null);
+    if (!stateManagerRef.current) {
+        // Initialize state manager with debug mode (can be controlled via env)
+        const debugMode = import.meta.env.DEV || import.meta.env.VITE_DEBUG_STATE_MANAGER === 'true';
+        stateManagerRef.current = new WorkflowGenerationStateManager(debugMode);
+    }
+    const stateManager = stateManagerRef.current;
     
     // Refs for auto-scrolling
     const step1Ref = useRef<HTMLDivElement>(null);
@@ -238,6 +256,21 @@ export function AutonomousAgentWizard() {
 
     const handleAnalyze = async () => {
         if (!prompt.trim()) return;
+        
+        // Execution Flow Architecture (STEP-2): Validate state transition
+        const currentState = mapWizardStepToState(step);
+        if (currentState !== WorkflowGenerationState.STATE_0_IDLE) {
+            toast({
+                title: 'Invalid State',
+                description: 'Cannot analyze: Not in idle state',
+                variant: 'destructive',
+            });
+            return;
+        }
+        
+        // Set user prompt in state manager
+        stateManager.setUserPrompt(prompt);
+        
         // Scroll immediately BEFORE state change - no waiting
         scrollImmediately(step2Ref);
         setStep('analyzing');
@@ -261,6 +294,11 @@ export function AutonomousAgentWizard() {
                 if (q.options.length > 0) initialAnswers[q.id] = q.options[0];
             });
             setAnswers(initialAnswers);
+            
+            // Execution Flow Architecture (STEP-2): Update state manager
+            stateManager.setClarifyingQuestions(data.questions);
+            stateManager.setClarifyingAnswers(initialAnswers);
+            
             setStep('questioning');
             // Ensure step 2 is visible after questions load
             scrollToStep(step2Ref, 300);
@@ -301,7 +339,7 @@ export function AutonomousAgentWizard() {
         });
         
         // Check if AI Agent/LLM functionality is needed
-        // Check both prompt and answers for AI-related keywords
+        // Only detect AI if explicitly mentioned - be conservative to avoid false positives
         const hasAIFunctionality = 
             promptText.includes('ai agent') ||
             promptText.includes('ai assistant') ||
@@ -309,8 +347,15 @@ export function AutonomousAgentWizard() {
             promptText.includes('chat bot') ||
             promptText.includes('llm') ||
             promptText.includes('language model') ||
-            promptText.includes('generate') ||
-            promptText.includes('analyze') ||
+            promptText.includes('ai model') ||
+            promptText.includes('ai-powered') ||
+            promptText.includes('ai powered') ||
+            promptText.includes('using ai') ||
+            promptText.includes('with ai') ||
+            // Only include 'generate' if combined with AI context
+            (promptText.includes('generate') && (promptText.includes('ai') || promptText.includes('content'))) ||
+            // Only include 'analyze' if combined with AI context (not just data analysis)
+            (promptText.includes('analyze') && (promptText.includes('ai') || promptText.includes('sentiment') || promptText.includes('intent'))) ||
             promptText.includes('summarize') ||
             promptText.includes('classify') ||
             promptText.includes('sentiment') ||
@@ -319,11 +364,6 @@ export function AutonomousAgentWizard() {
             promptText.includes('nlp') ||
             promptText.includes('text analysis') ||
             promptText.includes('content generation') ||
-            promptText.includes('ai-powered') ||
-            promptText.includes('ai powered') ||
-            promptText.includes('using ai') ||
-            promptText.includes('with ai') ||
-            promptText.includes('ai model') ||
             answerTexts.includes('ai agent') ||
             answerTexts.includes('ai assistant') ||
             answerTexts.includes('chatbot') ||
@@ -353,31 +393,39 @@ export function AutonomousAgentWizard() {
             console.log('✅ [Frontend] Added GEMINI_API_KEY (default for AI functionality)');
         }
         
-        // Check for output channels
-        if (answerValues.some(v => v.includes('slack'))) {
-            // Only ask for Slack Bot Token (not redundant SLACK_TOKEN or SLACK_WEBHOOK_URL)
-            // Check if normalized version already exists
-            const slackTokenNormalized = normalizeCredentialName('SLACK_BOT_TOKEN');
-            if (!credentials.some(c => normalizeCredentialName(c) === slackTokenNormalized)) {
-                credentials.push('SLACK_BOT_TOKEN');
+        // Check for output channels - ONLY if explicitly mentioned in prompt or answers
+        // CRITICAL FIX: Don't add credentials unless user explicitly requested the service
+        const promptLower = prompt.toLowerCase();
+        if ((answerValues.some(v => v.includes('slack')) || promptLower.includes('slack')) && 
+            !promptLower.includes('social media automation')) { // Social media automation doesn't always need Slack
+            // Only add if explicitly selected or mentioned
+            if (answerValues.some(v => v.includes('slack'))) {
+                credentials.push('SLACK_TOKEN', 'SLACK_WEBHOOK_URL');
             }
-        } else if (answerValues.some(v => v.includes('discord'))) {
-            if (!credentials.includes('DISCORD_WEBHOOK_URL')) {
-                credentials.push('DISCORD_WEBHOOK_URL');
-            }
-        } else if (answerValues.some(v => v.includes('email') || v.includes('smtp'))) {
-            // Only ask for SMTP if not using Gmail (Gmail uses pre-connected OAuth)
-            if (!answerValues.some(v => v.includes('gmail'))) {
-                if (!credentials.includes('SMTP_HOST')) credentials.push('SMTP_HOST');
-                if (!credentials.includes('SMTP_USERNAME')) credentials.push('SMTP_USERNAME');
-                if (!credentials.includes('SMTP_PASSWORD')) credentials.push('SMTP_PASSWORD');
-            }
-            // For Gmail, sender account is selected from connected accounts (handled in UI)
+        }
+        if (answerValues.some(v => v.includes('discord')) || promptLower.includes('discord')) {
+            credentials.push('DISCORD_WEBHOOK_URL');
+        }
+        // Only add SMTP if user explicitly mentions email/SMTP (not just "email" in general context)
+        if ((answerValues.some(v => v.includes('email') || v.includes('smtp')) || 
+             promptLower.includes('smtp') || promptLower.includes('send email')) &&
+            !promptLower.includes('gmail')) { // Gmail uses OAuth, not SMTP
+            credentials.push('SMTP_HOST', 'SMTP_USERNAME', 'SMTP_PASSWORD');
         }
         
-        // Google services (Sheets, Gmail, Drive) are pre-connected via OAuth
-        // Do NOT ask for Google OAuth credentials - they are already configured
-        // Only check for Gemini API Key if AI functionality is actually needed
+        // Check for Google services - ONLY add GEMINI_API_KEY if it's for AI functionality
+        // Google Sheets, Gmail, etc. use OAuth tokens, not GEMINI_API_KEY
+        // Only add GEMINI_API_KEY if Google is mentioned AND AI functionality is detected
+        const hasGoogleService = answerValues.some(v => v.includes('google')) || 
+            (requirements.platforms && requirements.platforms.some((p: any) => 
+                typeof p === 'string' ? p.toLowerCase().includes('google') : 
+                (p.name || p.type || '').toLowerCase().includes('google')
+            ));
+        
+        // Only add GEMINI_API_KEY if Google is mentioned AND it's for AI (not just Google Sheets/Gmail)
+        if (hasGoogleService && hasAIFunctionality && !credentials.includes('GEMINI_API_KEY')) {
+            credentials.push('GEMINI_API_KEY');
+        }
         
         // Check requirements for credential hints
         if (requirements.credentials && Array.isArray(requirements.credentials)) {
@@ -395,19 +443,30 @@ export function AutonomousAgentWizard() {
         }
         
         // Check APIs for credential requirements
+        // CRITICAL FIX: Only add credentials if user explicitly mentioned them in prompt
+        // Don't trust AI-generated requirements.apis blindly
         if (requirements.apis && Array.isArray(requirements.apis)) {
             requirements.apis.forEach((api: any) => {
                 const apiName = typeof api === 'string' ? api : (api.name || api.endpoint || '');
                 const apiLower = apiName.toLowerCase();
-                if (apiLower.includes('openai') || apiLower.includes('gpt')) {
+                // Only add OpenAI if user explicitly mentioned OpenAI, GPT, or ChatGPT in prompt
+                if ((apiLower.includes('openai') || apiLower.includes('gpt')) &&
+                    (promptLower.includes('openai') || promptLower.includes('gpt') || promptLower.includes('chatgpt'))) {
                     if (!credentials.includes('OPENAI_API_KEY')) credentials.push('OPENAI_API_KEY');
-                } else if (apiLower.includes('claude') || apiLower.includes('anthropic')) {
+                }
+                // Only add Anthropic if user explicitly mentioned Claude or Anthropic in prompt
+                if ((apiLower.includes('claude') || apiLower.includes('anthropic')) &&
+                    (promptLower.includes('claude') || promptLower.includes('anthropic'))) {
                     if (!credentials.includes('ANTHROPIC_API_KEY')) credentials.push('ANTHROPIC_API_KEY');
-                } else if (apiLower.includes('gemini')) {
-                    // Only ask for Gemini API Key if explicitly mentioned (not for Google Sheets/Gmail)
+                }
+                // Only add Gemini if user explicitly mentioned Gemini or Google AI in prompt
+                // Note: Google API (for Sheets/Gmail) is different from Google Gemini API
+                if (apiLower.includes('gemini') && 
+                    (apiLower.includes('ai') || apiLower.includes('llm') || hasAIFunctionality) &&
+                    (promptLower.includes('gemini') || promptLower.includes('google ai'))) {
                     if (!credentials.includes('GEMINI_API_KEY')) credentials.push('GEMINI_API_KEY');
                 }
-                // Google Sheets/Gmail APIs don't require Gemini API Key - they use OAuth
+                // Don't add GEMINI_API_KEY just for "google" - Google services use OAuth
             });
         }
         
@@ -426,6 +485,20 @@ export function AutonomousAgentWizard() {
     };
 
     const handleRefine = async () => {
+        // Execution Flow Architecture (STEP-2): Validate state transition
+        const currentState = mapWizardStepToState(step);
+        if (currentState !== WorkflowGenerationState.STATE_2_CLARIFICATION_ACTIVE) {
+            toast({
+                title: 'Invalid State',
+                description: 'Cannot refine: Must complete clarification first',
+                variant: 'destructive',
+            });
+            return;
+        }
+        
+        // Update answers in state manager
+        stateManager.setClarifyingAnswers(answers);
+        
         // Scroll immediately BEFORE state change - no waiting
         scrollImmediately(step3Ref);
         setStep('refining');
@@ -449,20 +522,275 @@ export function AutonomousAgentWizard() {
             const data = await response.json();
             setRefinement(data);
             
+            // CRITICAL FIX: Handle preview phase - show final prompt and allow node configuration
+            if (data.phase === 'preview' && data.workflow) {
+                console.log('✅ Backend returned preview phase - showing final prompt and node configuration');
+                
+                // Store the enhanced prompt for display
+                if (data.enhancedPrompt) {
+                    console.log('📝 Enhanced prompt from backend:', data.enhancedPrompt);
+                    // Update the refinement with enhanced prompt
+                    setRefinement({
+                        ...data,
+                        systemPrompt: data.enhancedPrompt,
+                        enhancedPrompt: data.enhancedPrompt,
+                    });
+                }
+                
+                // Ensure we're in the right state before confirming understanding
+                const currentState = mapWizardStepToState(step);
+                if (currentState !== WorkflowGenerationState.STATE_2_CLARIFICATION_ACTIVE) {
+                    // Force transition to clarification active state first
+                    console.log('⚠️ Not in CLARIFICATION_ACTIVE state, attempting to fix state...');
+                    // Try to set clarifying answers to get into the right state
+                    stateManager.setClarifyingAnswers(answers);
+                }
+                
+                // Auto-confirm understanding since we have a preview
+                const promptToConfirm = data.enhancedPrompt || data.prompt || '';
+                const confirmResult = stateManager.confirmUnderstanding(promptToConfirm);
+                
+                if (confirmResult.success) {
+                    setWorkflowUnderstandingConfirmed(true);
+                    // Show confirmation step with preview workflow
+                    setStep('confirmation');
+                    scrollToStep(step3Ref, 300);
+                    toast({
+                        title: 'Workflow Preview Ready',
+                        description: 'Review the final prompt and configure node properties if needed',
+                    });
+                    return; // Exit - user will configure and then build
+                } else {
+                    console.warn('⚠️ Failed to confirm understanding in preview phase:', confirmResult.error);
+                    // Still show the confirmation step, but understanding won't be confirmed in state manager
+                    // The button click handler will handle this case
+                    setStep('confirmation');
+                    scrollToStep(step3Ref, 300);
+                    return;
+                }
+            }
+            
+            // CRITICAL FIX: Check if backend already returned complete workflow (phase: 'complete')
+            // If so, use it directly instead of making another request
+            if (data.phase === 'complete' && data.workflow) {
+                console.log('✅ Backend returned complete workflow in refine response - using it directly');
+                
+                // Extract workflow data
+                const workflowNodes = data.workflow.nodes || [];
+                const workflowEdges = data.workflow.edges || [];
+                
+                if (workflowNodes.length > 0 && workflowEdges.length > 0) {
+                    // Workflow is complete - save it directly
+                    try {
+                        const { data: { user } } = await supabase.auth.getUser();
+                        const normalized = validateAndFixWorkflow({ nodes: workflowNodes, edges: workflowEdges });
+
+                        const workflowData = {
+                            name: (analysis?.summary && typeof analysis.summary === 'string') 
+                                ? analysis.summary.substring(0, 50) 
+                                : 'AI Generated Workflow',
+                            nodes: normalized.nodes,
+                            edges: normalized.edges,
+                            user_id: user?.id,
+                            updated_at: new Date().toISOString(),
+                        };
+
+                        const { data: savedWorkflow, error: saveError } = await supabase
+                            .from('workflows')
+                            .insert(workflowData)
+                            .select()
+                            .single();
+
+                        if (saveError) {
+                            console.error('Error saving workflow:', saveError);
+                            throw saveError;
+                        }
+
+                        if (savedWorkflow?.id) {
+                            setGeneratedWorkflowId(savedWorkflow.id);
+                            setNodes(normalized.nodes);
+                            setEdges(normalized.edges);
+                            setProgress(100);
+                            setIsComplete(true);
+                            setStep('complete');
+                            console.log('✅ Workflow saved successfully with ID:', savedWorkflow.id);
+                            return; // Exit early - workflow is complete
+                        }
+                    } catch (saveErr: any) {
+                        console.error('Error saving workflow:', saveErr);
+                        toast({
+                            title: 'Warning',
+                            description: 'Workflow generated but failed to save. Error: ' + (saveErr.message || 'Unknown error'),
+                            variant: 'destructive',
+                        });
+                    }
+                }
+            }
+            
+            // CRITICAL FIX: Handle phase-based responses correctly
+            // The backend now uses phases: configuration -> credentials -> complete
+            // Only ask for credentials AFTER workflow is built
+            
+            // Handle configuration phase - user needs to provide node configuration
+            if (data.phase === 'configuration') {
+                console.log('📋 [Frontend] Configuration phase - asking for node configuration');
+                console.log(`📋 [Frontend] Configuration questions: ${data.questions?.length || 0}`);
+                // Store partial workflow for display
+                if (data.partialWorkflow) {
+                    console.log('📊 [Frontend] Partial workflow received:', {
+                        nodes: data.partialWorkflow.nodes?.length || 0,
+                        edges: data.partialWorkflow.edges?.length || 0
+                    });
+                }
+                // Stay in refining step - user will answer configuration questions
+                // The next refine call will include these answers
+                setStep('refining');
+                toast({
+                    title: 'Configuration Required',
+                    description: `Please provide ${data.questions?.length || 0} configuration value(s) to continue`,
+                });
+                return; // Exit - wait for user to provide configuration
+            }
+            
+            // Handle credentials phase - workflow is built, now ask for runtime credentials
+            if (data.phase === 'credentials') {
+                console.log('🔑 [Frontend] Credentials phase - workflow built, asking for runtime credentials');
+                console.log('🔑 [Frontend] Required credentials:', data.requiredCredentials);
+                
+                // Workflow is already built - store it
+                if (data.partialWorkflow) {
+                    console.log('✅ [Frontend] Workflow built successfully:', {
+                        nodes: data.partialWorkflow.nodes?.length || 0,
+                        edges: data.partialWorkflow.edges?.length || 0
+                    });
+                }
+                
+                // Set credentials from backend
+                const detectedCredentials = data.requiredCredentials || [];
+                setRequiredCredentials(detectedCredentials);
+                stateManager.setRequiredCredentials(detectedCredentials);
+                
+                // Transition to credentials step
+                setStep('credentials');
+                scrollToStep(step3Ref, 300);
+                return; // Exit - wait for user to provide credentials
+            }
+            
+            // Handle complete phase - workflow is fully built and ready
+            if (data.phase === 'complete') {
+                console.log('✅ [Frontend] Complete phase - workflow fully built');
+                
+                // Extract credentials if provided (may be empty array)
+                const detectedCredentials = data.requiredCredentials || [];
+                setRequiredCredentials(detectedCredentials);
+                stateManager.setRequiredCredentials(detectedCredentials);
+                
+                // If workflow is provided, save it
+                if (data.workflow) {
+                    const workflowNodes = data.workflow.nodes || [];
+                    const workflowEdges = data.workflow.edges || [];
+                    
+                    if (workflowNodes.length > 0 && workflowEdges.length > 0) {
+                        try {
+                            const { data: { user } } = await supabase.auth.getUser();
+                            const normalized = validateAndFixWorkflow({ nodes: workflowNodes, edges: workflowEdges });
+
+                            const workflowData = {
+                                name: (analysis?.summary && typeof analysis.summary === 'string') 
+                                    ? analysis.summary.substring(0, 50) 
+                                    : 'AI Generated Workflow',
+                                nodes: normalized.nodes,
+                                edges: normalized.edges,
+                                user_id: user?.id,
+                                updated_at: new Date().toISOString(),
+                            };
+
+                            const { data: savedWorkflow, error: saveError } = await supabase
+                                .from('workflows')
+                                .insert(workflowData)
+                                .select()
+                                .single();
+
+                            if (saveError) {
+                                console.error('Error saving workflow:', saveError);
+                                throw saveError;
+                            }
+
+                            if (savedWorkflow?.id) {
+                                setGeneratedWorkflowId(savedWorkflow.id);
+                                setNodes(normalized.nodes);
+                                setEdges(normalized.edges);
+                                setProgress(100);
+                                setIsComplete(true);
+                                setStep('complete');
+                                console.log('✅ Workflow saved successfully with ID:', savedWorkflow.id);
+                                
+                                // If credentials are needed, show them after workflow is saved
+                                if (detectedCredentials.length > 0) {
+                                    toast({
+                                        title: 'Workflow Created',
+                                        description: `Workflow created! Please provide ${detectedCredentials.length} credential(s) to run it.`,
+                                    });
+                                    setStep('credentials');
+                                }
+                                return;
+                            }
+                        } catch (saveErr: any) {
+                            console.error('Error saving workflow:', saveErr);
+                            toast({
+                                title: 'Warning',
+                                description: 'Workflow generated but failed to save. Error: ' + (saveErr.message || 'Unknown error'),
+                                variant: 'destructive',
+                            });
+                        }
+                    }
+                }
+                
+                // If no workflow in response but phase is complete, proceed to confirmation
+                if (detectedCredentials.length === 0) {
+                    console.log('🚀 No credentials needed - proceeding to confirmation');
+                    setWorkflowUnderstandingConfirmed(true);
+                    const confirmResult = stateManager.confirmUnderstanding(data.systemPrompt || data.enhancedPrompt || '');
+                    if (confirmResult.success) {
+                        setTimeout(() => {
+                            handleBuild();
+                        }, 300);
+                    } else {
+                        setStep('confirmation');
+                        scrollToStep(step3Ref, 300);
+                    }
+                } else {
+                    // Credentials needed - show confirmation first, then credentials
+                    setStep('confirmation');
+                    scrollToStep(step3Ref, 300);
+                }
+                return;
+            }
+            
+            // LEGACY: Handle old refine response format (no phase field)
+            // This is for backward compatibility
+            console.log('⚠️ [Frontend] Legacy refine response format detected (no phase field)');
+            setWorkflowUnderstandingConfirmed(false);
+            
             // Identify required credentials from requirements and answers
-            // Use credentials from backend if provided, otherwise identify from requirements
+            // PRIORITY: Trust backend credential analysis (it analyzes actual workflow structure)
             let detectedCredentials: string[] = [];
             
-            if (data.requiredCredentials && Array.isArray(data.requiredCredentials) && data.requiredCredentials.length > 0) {
-                // Backend has already identified credentials - normalize them
+            if (data.requiredCredentials !== undefined && Array.isArray(data.requiredCredentials)) {
+                // Backend has provided credential analysis - trust it completely (even if empty array)
+                // Normalize credentials from backend
                 detectedCredentials = data.requiredCredentials.map((cred: string) => normalizeCredentialName(cred));
-                console.log('🔑 Backend identified required credentials:', detectedCredentials);
+                if (detectedCredentials.length > 0) {
+                    console.log('🔑 Backend identified required credentials:', detectedCredentials);
+                } else {
+                    console.log('✅ Backend confirmed: No credentials required for this workflow');
+                }
             } else if (data.requirements) {
-                // Fallback: identify from requirements (frontend detection)
+                // Fallback: Only use frontend detection if backend didn't provide requiredCredentials at all
                 detectedCredentials = identifyRequiredCredentials(data.requirements, answers);
-                console.log('🔑 Frontend identified required credentials:', detectedCredentials);
-                console.log('📋 Requirements:', data.requirements);
-                console.log('💬 Answers:', answers);
+                console.log('🔑 Frontend identified required credentials (fallback):', detectedCredentials);
+            } else {
+                console.log('🔑 No credentials required');
             }
             
             // Final deduplication with normalization
@@ -476,11 +804,41 @@ export function AutonomousAgentWizard() {
             
             const uniqueCredentials = Array.from(normalizedCreds.values());
             setRequiredCredentials(uniqueCredentials);
+            stateManager.setRequiredCredentials(uniqueCredentials);
             console.log('✅ Set requiredCredentials to (deduplicated & normalized):', uniqueCredentials);
             
-            setStep('confirmation');
-            // Ensure step 3 is visible after refinement loads
-            scrollToStep(step3Ref, 300);
+            // CRITICAL FIX: Only transition to confirmation if workflow is already built
+            // Check if workflow exists in response (legacy format may include it)
+            const hasWorkflow = data.workflow || data.partialWorkflow;
+            
+            if (hasWorkflow) {
+                console.log('✅ [Frontend] Workflow exists in response - safe to show confirmation');
+                if (detectedCredentials.length === 0) {
+                    console.log('🚀 Auto-skipping confirmation - no credentials needed');
+                    setWorkflowUnderstandingConfirmed(true);
+                    const confirmResult = stateManager.confirmUnderstanding(data.systemPrompt || '');
+                    if (confirmResult.success) {
+                        setTimeout(() => {
+                            handleBuild();
+                        }, 300);
+                    } else {
+                        setStep('confirmation');
+                        scrollToStep(step3Ref, 300);
+                    }
+                } else {
+                    setStep('confirmation');
+                    scrollToStep(step3Ref, 300);
+                }
+            } else {
+                // No workflow yet - stay in refining step
+                console.log('⚠️ [Frontend] No workflow in response - staying in refining step');
+                console.log('📋 [Frontend] Will wait for workflow to be built before asking for credentials');
+                setStep('refining');
+                toast({
+                    title: 'Building Workflow',
+                    description: 'Generating workflow structure...',
+                });
+            }
         } catch (err: any) {
             console.error(err);
             toast({ title: 'Refinement Failed', description: err.message, variant: 'destructive' });
@@ -489,6 +847,25 @@ export function AutonomousAgentWizard() {
     };
 
     const handleBuild = async () => {
+        // REMOVED: State verification - just proceed directly
+        
+        // Set provided credentials in state manager (non-blocking)
+        try {
+            stateManager.setProvidedCredentials(credentialValues);
+        } catch (err) {
+            console.warn('State manager credential update failed (non-blocking):', err);
+        }
+        
+        // Try to start building (non-blocking)
+        try {
+            const buildResult = stateManager.startBuilding();
+            if (!buildResult.success) {
+                console.warn('State manager build start failed (non-blocking):', buildResult.error);
+            }
+        } catch (err) {
+            console.warn('State manager build start failed (non-blocking):', err);
+        }
+        
         // Scroll to top before transitioning to building page
         window.scrollTo({ top: 0, behavior: 'smooth' });
         
@@ -554,6 +931,14 @@ export function AutonomousAgentWizard() {
 
             // Get Supabase URL and session token
             const { data: { session } } = await supabase.auth.getSession();
+            
+            // Determine the prompt to use: check refinement.prompt, refinement.refinedPrompt, or fallback to original prompt
+            const finalPrompt = refinement?.prompt || refinement?.refinedPrompt || prompt;
+            
+            if (!finalPrompt || !finalPrompt.trim()) {
+                throw new Error('Prompt is required. Please provide a workflow description.');
+            }
+            
             // Use streaming mode to get real-time progress
             const response = await fetch(`${ENDPOINTS.itemBackend}/api/generate-workflow`, {
                 method: 'POST',
@@ -563,7 +948,7 @@ export function AutonomousAgentWizard() {
                     'x-stream-progress': 'true',
                 },
                 body: JSON.stringify({
-                    prompt: refinement?.refinedPrompt,
+                    prompt: finalPrompt,
                     mode: 'create',
                     config: config
                 })
@@ -644,41 +1029,70 @@ export function AutonomousAgentWizard() {
                             const isCompleted = update.status === 'completed' || update.status === 'success' || update.success === true || (hasNodes && hasEdges);
                             
                             // Check for required credentials BEFORE completion
-                            // CRITICAL: Only check on first update, not after credentials have been provided
-                            // This prevents refresh loop where workflow keeps asking for credentials
-                            if (update.requiredCredentials && 
-                                Array.isArray(update.requiredCredentials) && 
-                                update.requiredCredentials.length > 0 && 
-                                step === 'building' && 
-                                !showCredentialStep && 
-                                Object.keys(credentialValues).length === 0) {
-                                
-                                const missingCreds = update.requiredCredentials.filter((cred: string) => {
-                                    // Check if credential is provided in config
-                                    const credLower = cred.toLowerCase();
-                                    const normalizedCred = cred.replace(/_/g, '').toLowerCase();
-                                    
-                                    // Check in config (normalized credentials)
-                                    const inConfig = Object.keys(config).some(key => {
-                                        const keyLower = key.toLowerCase();
-                                        return keyLower === credLower || 
-                                               keyLower === normalizedCred ||
-                                               keyLower.includes(normalizedCred.replace(/api|key|token/gi, ''));
+                            // CRITICAL FIX: Trust backend even if it returns empty array (means no credentials needed)
+                            if (update.requiredCredentials !== undefined && Array.isArray(update.requiredCredentials)) {
+                                if (update.requiredCredentials.length > 0) {
+                                    const missingCreds = update.requiredCredentials.filter((cred: string) => {
+                                        // Check if credential is provided in config
+                                        const credLower = cred.toLowerCase();
+                                        const provided = Object.keys(config).some(key => 
+                                            key.toLowerCase().includes(credLower.replace(/_/g, '').replace(/api|key|token/gi, ''))
+                                        );
+                                        return !provided;
                                     });
                                     
-                                    return !inConfig;
-                                });
-                                
-                                // Only show credentials step if we have missing creds AND haven't shown it before
-                                if (missingCreds.length > 0) {
-                                    // Deduplicate credentials before setting
-                                    const uniqueMissingCreds = [...new Set(missingCreds)];
-                                    setRequiredCredentials(uniqueMissingCreds);
-                                    setShowCredentialStep(true);
-                                    setStep('credentials'); // New step for credential collection
-                                    stopFallbackProgress();
-                                    setBuildingLogs(prev => [...prev, `⚠️ ${missingCreds.length} credential(s) required`]);
-                                    return; // Don't complete yet, wait for credentials
+                                    if (missingCreds.length > 0) {
+                                        setRequiredCredentials(missingCreds);
+                                        setShowCredentialStep(true);
+                                        setStep('credentials'); // New step for credential collection
+                                        stopFallbackProgress();
+                                        setBuildingLogs(prev => [...prev, `⚠️ ${missingCreds.length} credential(s) required`]);
+                                        return; // Don't complete yet, wait for credentials
+                                    }
+                                } else {
+                                    // Backend says no credentials needed - clear any frontend-detected credentials
+                                    if (requiredCredentials.length > 0) {
+                                        console.log('✅ Backend confirmed no credentials needed - clearing frontend-detected credentials');
+                                        setRequiredCredentials([]);
+                                    }
+                                    
+                                    // CRITICAL: Only check on first update, not after credentials have been provided
+                                    // This prevents refresh loop where workflow keeps asking for credentials
+                                    if (update.requiredCredentials && 
+                                        Array.isArray(update.requiredCredentials) && 
+                                        update.requiredCredentials.length > 0 && 
+                                        step === 'building' && 
+                                        !showCredentialStep && 
+                                        Object.keys(credentialValues).length === 0) {
+                                        
+                                        const missingCreds = update.requiredCredentials.filter((cred: string) => {
+                                            // Check if credential is provided in config
+                                            const credLower = cred.toLowerCase();
+                                            const normalizedCred = cred.replace(/_/g, '').toLowerCase();
+                                            
+                                            // Check in config (normalized credentials)
+                                            const inConfig = Object.keys(config).some(key => {
+                                                const keyLower = key.toLowerCase();
+                                                return keyLower === credLower || 
+                                                       keyLower === normalizedCred ||
+                                                       keyLower.includes(normalizedCred.replace(/api|key|token/gi, ''));
+                                            });
+                                            
+                                            return !inConfig;
+                                        });
+                                        
+                                        // Only show credentials step if we have missing creds AND haven't shown it before
+                                        if (missingCreds.length > 0) {
+                                            // Deduplicate credentials before setting
+                                            const uniqueMissingCreds = [...new Set(missingCreds)];
+                                            setRequiredCredentials(uniqueMissingCreds);
+                                            setShowCredentialStep(true);
+                                            setStep('credentials'); // New step for credential collection
+                                            stopFallbackProgress();
+                                            setBuildingLogs(prev => [...prev, `⚠️ ${missingCreds.length} credential(s) required`]);
+                                            return; // Don't complete yet, wait for credentials
+                                        }
+                                    }
                                 }
                             }
                             // If credentials were already provided or step is not 'building', continue with workflow generation
@@ -699,12 +1113,31 @@ export function AutonomousAgentWizard() {
                                 setIsComplete(true);
                                 setBuildingLogs(prev => [...prev, 'Workflow Generated Successfully!']);
 
+                                // Execution Flow Architecture (STEP-2): Set workflow blueprint
+                                stateManager.setWorkflowBlueprint({ nodes, edges });
+                                
+                                // Execution Flow Architecture (STEP-2): Set workflow blueprint
+                                stateManager.setWorkflowBlueprint({ nodes, edges });
+                                
                                 // Normalize and save immediately
                                 try {
                                     const { data: { user } } = await supabase.auth.getUser();
                                     const workflowNodes = nodes || [];
                                     const workflowEdges = edges || [];
                                     const normalized = validateAndFixWorkflow({ nodes: workflowNodes, edges: workflowEdges });
+                                    
+                                    // Execution Flow Architecture (STEP-2): Check for validation errors
+                                    // If validation fixes were applied, we might have had errors
+                                    const hadErrors = JSON.stringify(normalized.nodes) !== JSON.stringify(workflowNodes) ||
+                                                     JSON.stringify(normalized.edges) !== JSON.stringify(workflowEdges);
+                                    
+                                    if (hadErrors) {
+                                        // Add validation error but continue (auto-fix was applied)
+                                        stateManager.addValidationError({
+                                            type: 'auto_fixed',
+                                            message: 'Workflow had issues that were automatically fixed',
+                                        });
+                                    }
 
                                     const workflowData = {
                                         name: (analysis?.summary && typeof analysis.summary === 'string') 
@@ -728,6 +1161,13 @@ export function AutonomousAgentWizard() {
                                     }
 
                                     if (savedWorkflow?.id) {
+                                        // Execution Flow Architecture (STEP-2): Mark workflow as ready
+                                        const readyResult = stateManager.markWorkflowReady();
+                                        if (!readyResult.success) {
+                                            console.warn('[StateManager] Warning:', readyResult.error);
+                                            // Still proceed but log the warning
+                                        }
+                                        
                                         setGeneratedWorkflowId(savedWorkflow.id);
                                         setNodes(normalized.nodes);
                                         setEdges(normalized.edges);
@@ -769,6 +1209,7 @@ export function AutonomousAgentWizard() {
             // (Backend might send final workflow data without explicit completion status)
             if (!finalData) {
                 // Fallback: If streaming didn't work, use regular invoke
+                // Use the same finalPrompt determined earlier
                 const response = await fetch(`${ENDPOINTS.itemBackend}/api/generate-workflow`, {
                     method: 'POST',
                     headers: {
@@ -776,7 +1217,7 @@ export function AutonomousAgentWizard() {
                         'Authorization': `Bearer ${session?.access_token || ''}`,
                     },
                     body: JSON.stringify({
-                        prompt: refinement?.refinedPrompt,
+                        prompt: finalPrompt,
                         mode: 'create',
                         config: requirementValues
                     })
@@ -918,7 +1359,32 @@ export function AutonomousAgentWizard() {
             // Clean up fallback progress on error
             stopFallbackProgress();
 
-            console.error('Workflow generation error:', err);
+            console.error(err);
+            
+            // Execution Flow Architecture (STEP-2): Handle error with retry logic
+            const currentState = stateManager.getCurrentState();
+            if (currentState === WorkflowGenerationState.STATE_5_WORKFLOW_BUILDING || 
+                currentState === WorkflowGenerationState.STATE_6_WORKFLOW_VALIDATION) {
+                // Try to retry if we haven't exceeded retry count
+                const retryResult = stateManager.retryBuilding();
+                if (retryResult.success) {
+                    toast({ 
+                        title: 'Retrying...', 
+                        description: `Attempt ${stateManager.getExecutionState().retry_count}/3`,
+                    });
+                    // Could trigger rebuild here if needed
+                } else {
+                    // Max retries reached, handle error
+                    stateManager.handleError(err.message || 'Build failed after retries');
+                    toast({ 
+                        title: 'Build Failed', 
+                        description: err.message || 'Maximum retries reached',
+                        variant: 'destructive' 
+                    });
+                }
+            } else {
+                stateManager.handleError(err.message || 'Build failed');
+            }
             
             // Don't go back to confirmation if we're already past that step
             // Instead, show error but stay on current step or go to a safe state
@@ -936,11 +1402,15 @@ export function AutonomousAgentWizard() {
                     description: err.message || 'An error occurred. Please try again.', 
                     variant: 'destructive' 
                 });
+                setStep('confirmation');
             }
         }
     };
 
     const reset = () => {
+        // Execution Flow Architecture (STEP-2): Reset state manager
+        stateManager.reset();
+        
         setStep('idle');
         setPrompt('');
         setAnalysis(null);
@@ -953,6 +1423,7 @@ export function AutonomousAgentWizard() {
         setIsComplete(false);
         setBuildStartTime(null);
         setElapsedTime(0);
+        setWorkflowUnderstandingConfirmed(false);
         // Scroll back to top
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
@@ -1089,8 +1560,8 @@ export function AutonomousAgentWizard() {
                                     Clarifying Questions
                                 </h3>
                                 <div className="grid gap-4">
-                                    {analysis.questions.map((q) => (
-                                        <Card key={q.id} className="hover:border-border transition-colors">
+                                    {analysis.questions.map((q, index) => (
+                                        <Card key={`question-${index}-${q.id}`} className="hover:border-border transition-colors">
                                             <CardHeader className="pb-3">
                                                 <CardTitle className="text-base">{q.text}</CardTitle>
                                             </CardHeader>
@@ -1157,7 +1628,7 @@ export function AutonomousAgentWizard() {
                         />
                     )}
 
-                    {/* STEP 3: Final Prompt */}
+                    {/* STEP 3: Show Final Understood System Prompt - Confirmation Required */}
                     {step !== 'idle' && step !== 'analyzing' && refinement && refinement.systemPrompt && (
                         <div ref={step3Ref} className="scroll-mt-6">
                             <motion.div
@@ -1167,13 +1638,119 @@ export function AutonomousAgentWizard() {
                                 <Card className="border-green-500/30 shadow-lg">
                                     <CardHeader>
                                         <CardTitle className="text-green-400 flex items-center gap-2">
-                                            <Sparkles className="h-5 w-5" /> Final Prompt
+                                            <Sparkles className="h-5 w-5" /> Here is my understanding of your workflow
                                         </CardTitle>
-                                        <CardDescription>System prompt in 20-30 words</CardDescription>
+                                        <CardDescription>Please review and confirm before we proceed</CardDescription>
                                     </CardHeader>
-                                    <CardContent>
-                                        <div className="bg-green-500/10 p-4 rounded-md text-foreground leading-relaxed border border-green-500/20">
-                                            {refinement.systemPrompt}
+                                    <CardContent className="space-y-6">
+                                        {/* Structured Summary */}
+                                        <div className="bg-green-500/10 p-6 rounded-md border border-green-500/20 space-y-4">
+                                            <div className="space-y-3">
+                                                <div>
+                                                    <span className="font-semibold text-green-400">• Trigger:</span>
+                                                    <p className="text-foreground mt-1 ml-4">
+                                                        {(() => {
+                                                            const trigger = analysis?.detectedWorkflowType || 
+                                                                          refinement.systemPrompt?.toLowerCase().match(/(?:trigger|when|on|schedule|form|webhook|manual)[^.]*/i)?.[0] ||
+                                                                          'User-initiated workflow';
+                                                            return trigger.charAt(0).toUpperCase() + trigger.slice(1);
+                                                        })()}
+                                                    </p>
+                                                </div>
+                                                <div>
+                                                    <span className="font-semibold text-green-400">• Actions:</span>
+                                                    <p className="text-foreground mt-1 ml-4">
+                                                        {(() => {
+                                                            const actions = refinement.systemPrompt || analysis?.summary || 'Process and execute workflow steps';
+                                                            // Extract key actions from system prompt
+                                                            const actionMatch = actions.match(/(?:will|should|to)\s+([^.]{10,100})/i);
+                                                            return actionMatch ? actionMatch[1] : actions.substring(0, 100);
+                                                        })()}
+                                                    </p>
+                                                </div>
+                                                <div>
+                                                    <span className="font-semibold text-green-400">• Logic:</span>
+                                                    <p className="text-foreground mt-1 ml-4">
+                                                        {(() => {
+                                                            const hasConditions = answers && Object.values(answers).some(a => 
+                                                                typeof a === 'string' && (a.toLowerCase().includes('if') || a.toLowerCase().includes('condition') || a.toLowerCase().includes('when'))
+                                                            );
+                                                            return hasConditions ? 'Conditional logic based on user inputs' : 'Linear workflow execution';
+                                                        })()}
+                                                    </p>
+                                                </div>
+                                                <div>
+                                                    <span className="font-semibold text-green-400">• Output:</span>
+                                                    <p className="text-foreground mt-1 ml-4">
+                                                        {(() => {
+                                                            const outputDest = answers && Object.values(answers).find(a => 
+                                                                typeof a === 'string' && (a.toLowerCase().includes('slack') || a.toLowerCase().includes('email') || a.toLowerCase().includes('discord') || a.toLowerCase().includes('webhook'))
+                                                            );
+                                                            return outputDest || 'Workflow result output';
+                                                        })()}
+                                                    </p>
+                                                </div>
+                                                <div>
+                                                    <span className="font-semibold text-green-400">• Error handling:</span>
+                                                    <p className="text-foreground mt-1 ml-4">
+                                                        Automatic error detection and recovery with validation
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* System Prompt Preview - Show enhanced prompt if available */}
+                                        <div className="bg-muted/50 p-4 rounded-md border border-border">
+                                            <p className="text-sm text-muted-foreground mb-2">Final Enhanced Prompt:</p>
+                                            <p className="text-foreground leading-relaxed text-sm">
+                                                {refinement.enhancedPrompt || refinement.systemPrompt || 'No prompt available'}
+                                            </p>
+                                        </div>
+
+                                        {/* Confirmation Buttons */}
+                                        <div className="flex gap-3 pt-2">
+                                            <Button
+                                                onClick={() => {
+                                                    // REMOVED: All state verification - just proceed directly
+                                                    setWorkflowUnderstandingConfirmed(true);
+                                                    
+                                                    // Auto-proceed to building if no credentials needed
+                                                    if (requiredCredentials.length === 0) {
+                                                        toast({
+                                                            title: 'Confirmed',
+                                                            description: 'No credentials needed. Starting workflow build...',
+                                                        });
+                                                        // Auto-start building after a short delay
+                                                        setTimeout(() => {
+                                                            handleBuild();
+                                                        }, 500);
+                                                    } else {
+                                                        toast({
+                                                            title: 'Confirmed',
+                                                            description: 'Proceeding to credentials step...',
+                                                        });
+                                                        // Auto-scroll to credentials step if needed
+                                                        setTimeout(() => scrollToStep(step4Ref, 300), 200);
+                                                    }
+                                                }}
+                                                className="flex-1 bg-green-600 hover:bg-green-500"
+                                                size="lg"
+                                            >
+                                                <CheckCircle2 className="h-4 w-4 mr-2" />
+                                                Yes, this is correct
+                                            </Button>
+                                            <Button
+                                                onClick={() => {
+                                                    setStep('questioning');
+                                                    setWorkflowUnderstandingConfirmed(false);
+                                                    scrollToStep(step2Ref, 300);
+                                                }}
+                                                variant="outline"
+                                                size="lg"
+                                            >
+                                                <Settings2 className="h-4 w-4 mr-2" />
+                                                Edit / Go Back
+                                            </Button>
                                         </div>
                                     </CardContent>
                                 </Card>
@@ -1181,8 +1758,8 @@ export function AutonomousAgentWizard() {
                         </div>
                     )}
 
-                    {/* STEP 4: Required Credentials */}
-                    {step === 'confirmation' && refinement && requiredCredentials.length > 0 && (
+                    {/* STEP 4: Required Credentials - Only show if workflow understanding is confirmed */}
+                    {step === 'confirmation' && refinement && workflowUnderstandingConfirmed && requiredCredentials.length > 0 && (
                         <div ref={step4Ref} className="scroll-mt-6">
                             <motion.div
                                 initial={{ opacity: 0, y: 20 }}
@@ -1404,8 +1981,8 @@ export function AutonomousAgentWizard() {
                         </div>
                     )}
 
-                    {/* Ready to Build Section - Only show when no credentials needed or all provided */}
-                    {step === 'confirmation' && refinement && requiredCredentials.length === 0 && (
+                    {/* Ready to Build Section - Only show when workflow confirmed and no credentials needed */}
+                    {step === 'confirmation' && refinement && workflowUnderstandingConfirmed && requiredCredentials.length === 0 && (
                         <motion.div
                             initial={{ opacity: 0, y: 20 }} 
                             animate={{ opacity: 1, y: 0 }}

@@ -38,7 +38,7 @@ const guideData: Record<string, { title: string; steps: string[] }> = {
       '3. Common formats: https://api.service.com or https://service.com/api/v1',
       '4. For REST APIs, the URL typically includes: protocol (https://), domain, and path',
       '5. Some services provide URLs in their dashboard under "API Settings" or "Integration"',
-      '6. For webhooks, use your server\'s public URL or a service like ngrok for local testing',
+      '6. For webhooks, use your server\'s public URL',
       '7. Ensure the URL includes the protocol (http:// or https://)',
       '8. Test the URL in a browser or API client to verify it\'s accessible'
     ]
