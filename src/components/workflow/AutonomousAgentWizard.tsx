@@ -83,6 +83,7 @@ export function AutonomousAgentWizard() {
     const [cognitiveTextIndex, setCognitiveTextIndex] = useState(0);
     const [circleTextIndex, setCircleTextIndex] = useState(0);
     const [workflowUnderstandingConfirmed, setWorkflowUnderstandingConfirmed] = useState(false);
+    const [pendingWorkflowData, setPendingWorkflowData] = useState<{ nodes: any[], edges: any[], update: any } | null>(null);
     const { toast } = useToast();
     const { setNodes, setEdges } = useWorkflowStore();
     const { theme, toggleTheme } = useTheme();
@@ -326,6 +327,12 @@ export function AutonomousAgentWizard() {
     // Identify required credentials from requirements and answers
     const identifyRequiredCredentials = (requirements: any, answers: Record<string, string>): string[] => {
         const credentials: string[] = [];
+        
+        // CRITICAL: Add null safety check
+        if (!requirements) {
+            console.warn('⚠️  [Frontend] Requirements is null/undefined - skipping credential identification');
+            return credentials;
+        }
         
         // Extract selected services from answers
         const answerValues = Object.values(answers).map(v => String(v).toLowerCase());
@@ -785,7 +792,7 @@ export function AutonomousAgentWizard() {
                 } else {
                     console.log('✅ Backend confirmed: No credentials required for this workflow');
                 }
-            } else if (data.requirements) {
+            } else if (data?.requirements) {
                 // Fallback: Only use frontend detection if backend didn't provide requiredCredentials at all
                 detectedCredentials = identifyRequiredCredentials(data.requirements, answers);
                 console.log('🔑 Frontend identified required credentials (fallback):', detectedCredentials);
@@ -846,7 +853,335 @@ export function AutonomousAgentWizard() {
         }
     };
 
+    // Universal function to inject user-provided credentials into workflow nodes
+    // This stores credentials in the node's config, not as environment variables
+    // Works for ALL node types by intelligently matching credential names to config field names
+    const injectCredentialsIntoNodes = (nodes: any[], credentials: Record<string, string>): any[] => {
+        if (Object.keys(credentials).length === 0) {
+            console.log('[Credential Injection] No credentials provided, skipping injection');
+            return nodes;
+        }
+        console.log('[Credential Injection] Injecting credentials into nodes:', Object.keys(credentials));
+        
+        // Helper function to check if a field name matches a credential
+        const matchesCredential = (fieldName: string, credName: string): boolean => {
+            const fieldLower = fieldName.toLowerCase().replace(/[_-]/g, '');
+            const credLower = credName.toLowerCase().replace(/[_-]/g, '');
+            
+            // Direct match
+            if (fieldLower === credLower) return true;
+            
+            // Check if credential name contains key parts of field name
+            const credParts = credLower.split('_').filter(p => p.length > 2);
+            if (credParts.length > 0 && credParts.every(part => fieldLower.includes(part))) {
+                return true;
+            }
+            
+            // Check if field name contains key parts of credential name
+            const fieldParts = fieldLower.split(/(?=[A-Z])|_|-/).filter(p => p.length > 2);
+            if (fieldParts.length > 0 && fieldParts.every(part => credLower.includes(part))) {
+                return true;
+            }
+            
+            return false;
+        };
+        
+        // Helper function to convert credential name to possible field names
+        const getPossibleFieldNames = (credName: string): string[] => {
+            const credLower = credName.toLowerCase();
+            const possibilities: string[] = [];
+            
+            // Remove common prefixes/suffixes
+            let base = credLower
+                .replace(/^(slack_|discord_|google_|smtp_|database_|api_)/, '')
+                .replace(/(_url|_token|_key|_secret|_password|_id)$/, '');
+            
+            // Generate variations
+            possibilities.push(base); // webhook
+            possibilities.push(base + 'url'); // webhookurl
+            possibilities.push(base + '_url'); // webhook_url
+            possibilities.push(base + 'Url'); // webhookUrl (camelCase)
+            possibilities.push(base + '-url'); // webhook-url
+            
+            // Special mappings
+            if (credLower.includes('webhook')) {
+                possibilities.push('webhookUrl', 'webhook_url', 'webhook', 'url');
+            }
+            if (credLower.includes('token')) {
+                possibilities.push('token', 'accessToken', 'access_token', 'authToken', 'auth_token');
+            }
+            if (credLower.includes('api_key') || credLower.includes('apikey')) {
+                possibilities.push('apiKey', 'api_key', 'api-key', 'key', 'apikey');
+            }
+            if (credLower.includes('secret')) {
+                possibilities.push('secret', 'clientSecret', 'client_secret', 'secretKey', 'secret_key');
+            }
+            if (credLower.includes('password')) {
+                possibilities.push('password', 'passwd', 'pwd');
+            }
+            if (credLower.includes('username')) {
+                possibilities.push('username', 'user', 'userName', 'user_name');
+            }
+            if (credLower.includes('host')) {
+                possibilities.push('host', 'hostname', 'server');
+            }
+            if (credLower.includes('spreadsheet') || credLower.includes('sheet')) {
+                possibilities.push('spreadsheetId', 'spreadsheet_id', 'sheetId', 'sheet_id', 'id');
+            }
+            if (credLower.includes('connection') && credLower.includes('string')) {
+                possibilities.push('connectionString', 'connection_string', 'connection', 'connString', 'conn_string');
+            }
+            
+            return [...new Set(possibilities)]; // Remove duplicates
+        };
+        
+        return nodes.map((node: any) => {
+            const nodeType = (node.type || node.data?.type || '').toLowerCase();
+            const nodeConfig = { ...(node.data?.config || {}) };
+            let updated = false;
+            
+            // Get all existing config field names (check various naming conventions)
+            const configFieldNames = new Set<string>();
+            Object.keys(nodeConfig).forEach(key => {
+                configFieldNames.add(key);
+                configFieldNames.add(key.toLowerCase());
+                configFieldNames.add(key.replace(/[_-]/g, ''));
+            });
+            
+            // Try to inject each credential
+            Object.entries(credentials).forEach(([credName, value]) => {
+                if (!value || value.trim() === '') return; // Skip empty credentials
+                
+                const credNameLower = credName.toLowerCase();
+                let injected = false;
+                
+                // Strategy 1: Direct field name matching (exact or normalized)
+                const possibleFieldNames = getPossibleFieldNames(credName);
+                for (const fieldName of possibleFieldNames) {
+                    // Check exact match
+                    if (nodeConfig.hasOwnProperty(fieldName)) {
+                        nodeConfig[fieldName] = value;
+                        updated = true;
+                        injected = true;
+                        console.log(`[Credential Injection] Applied ${credName} to ${node.id}.${fieldName} (exact match)`);
+                        break;
+                    }
+                    
+                    // Check case-insensitive match
+                    const matchingKey = Object.keys(nodeConfig).find(
+                        k => k.toLowerCase() === fieldName.toLowerCase()
+                    );
+                    if (matchingKey) {
+                        nodeConfig[matchingKey] = value;
+                        updated = true;
+                        injected = true;
+                        console.log(`[Credential Injection] Applied ${credName} to ${node.id}.${matchingKey} (case-insensitive match)`);
+                        break;
+                    }
+                    
+                    // Check normalized match (remove underscores, dashes)
+                    const normalizedFieldName = fieldName.replace(/[_-]/g, '').toLowerCase();
+                    const matchingNormalizedKey = Object.keys(nodeConfig).find(
+                        k => k.replace(/[_-]/g, '').toLowerCase() === normalizedFieldName
+                    );
+                    if (matchingNormalizedKey) {
+                        nodeConfig[matchingNormalizedKey] = value;
+                        updated = true;
+                        injected = true;
+                        console.log(`[Credential Injection] Applied ${credName} to ${node.id}.${matchingNormalizedKey} (normalized match)`);
+                        break;
+                    }
+                }
+                
+                // Strategy 2: Semantic matching - check if any config field semantically matches the credential
+                if (!injected) {
+                    for (const [configKey, configValue] of Object.entries(nodeConfig)) {
+                        if (matchesCredential(configKey, credName)) {
+                            // Check if the field is empty or has a placeholder
+                            const isEmpty = !configValue || 
+                                          (typeof configValue === 'string' && (
+                                            configValue.trim() === '' ||
+                                            configValue.includes('{{') ||
+                                            configValue.includes('${') ||
+                                            configValue.toLowerCase().includes('placeholder') ||
+                                            configValue.toLowerCase().includes('example')
+                                          ));
+                            
+                            if (isEmpty) {
+                                nodeConfig[configKey] = value;
+                                updated = true;
+                                injected = true;
+                                console.log(`[Credential Injection] Applied ${credName} to ${node.id}.${configKey} (semantic match)`);
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                // Strategy 3: Node-type-specific intelligent mapping
+                if (!injected) {
+                    // Slack nodes
+                    if (nodeType.includes('slack')) {
+                        if (credNameLower.includes('webhook')) {
+                            nodeConfig.webhookUrl = value;
+                            updated = true;
+                            injected = true;
+                            console.log(`[Credential Injection] Applied ${credName} to ${node.id}.webhookUrl (Slack webhook)`);
+                        } else if (credNameLower.includes('token')) {
+                            nodeConfig.token = value;
+                            updated = true;
+                            injected = true;
+                            console.log(`[Credential Injection] Applied ${credName} to ${node.id}.token (Slack token)`);
+                        }
+                    }
+                    
+                    // Discord nodes
+                    if (nodeType.includes('discord') && credNameLower.includes('webhook')) {
+                        nodeConfig.webhookUrl = value;
+                        updated = true;
+                        injected = true;
+                        console.log(`[Credential Injection] Applied ${credName} to ${node.id}.webhookUrl (Discord webhook)`);
+                    }
+                    
+                    // Google Sheets nodes
+                    if (nodeType.includes('google') && nodeType.includes('sheet')) {
+                        if (credNameLower.includes('sheet') || credNameLower.includes('spreadsheet')) {
+                            const urlMatch = String(value).match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+                            nodeConfig.spreadsheetId = urlMatch ? urlMatch[1] : value;
+                            updated = true;
+                            injected = true;
+                            console.log(`[Credential Injection] Applied ${credName} to ${node.id}.spreadsheetId (Google Sheets)`);
+                        }
+                    }
+                    
+                    // Email/SMTP nodes
+                    if (nodeType.includes('email') || nodeType.includes('smtp')) {
+                        if (credNameLower.includes('smtp_host') || credNameLower.includes('host')) {
+                            nodeConfig.host = value;
+                            updated = true;
+                            injected = true;
+                        } else if (credNameLower.includes('smtp_username') || credNameLower.includes('username')) {
+                            nodeConfig.username = value;
+                            updated = true;
+                            injected = true;
+                        } else if (credNameLower.includes('smtp_password') || credNameLower.includes('password')) {
+                            nodeConfig.password = value;
+                            updated = true;
+                            injected = true;
+                        }
+                        if (injected) {
+                            console.log(`[Credential Injection] Applied ${credName} to ${node.id} (SMTP)`);
+                        }
+                    }
+                    
+                    // Database nodes
+                    if (nodeType.includes('database')) {
+                        if (credNameLower.includes('connection') || credNameLower.includes('connection_string')) {
+                            nodeConfig.connectionString = value;
+                            updated = true;
+                            injected = true;
+                            console.log(`[Credential Injection] Applied ${credName} to ${node.id}.connectionString (Database)`);
+                        }
+                    }
+                    
+                    // HTTP/API nodes
+                    if ((nodeType.includes('http') || nodeType.includes('api')) && credNameLower.includes('api_key')) {
+                        nodeConfig.apiKey = value;
+                        updated = true;
+                        injected = true;
+                        console.log(`[Credential Injection] Applied ${credName} to ${node.id}.apiKey (HTTP/API)`);
+                    }
+                }
+            });
+            
+            if (updated) {
+                return {
+                    ...node,
+                    data: {
+                        ...node.data,
+                        config: nodeConfig,
+                    },
+                };
+            }
+            return node;
+        });
+    };
+
     const handleBuild = async () => {
+        // Check if we have a pending workflow that was built but needs credentials
+        // If so, save it instead of rebuilding
+        if (pendingWorkflowData && step === 'credentials') {
+            console.log('✅ Using pending workflow data - saving workflow with provided credentials');
+            try {
+                const { data: { user } } = await supabase.auth.getUser();
+                
+                // Inject user-provided credentials into nodes BEFORE normalizing
+                // This stores credentials in the node config (e.g., webhookUrl for slack_message)
+                // NOT as environment variables - credentials are stored per-workflow
+                console.log('[Credential Injection] Injecting credentials into pending workflow nodes');
+                const nodesWithCredentials = injectCredentialsIntoNodes(
+                    pendingWorkflowData.nodes, 
+                    credentialValues
+                );
+                
+                const normalized = validateAndFixWorkflow({ 
+                    nodes: nodesWithCredentials, 
+                    edges: pendingWorkflowData.edges 
+                });
+                
+                console.log('[Credential Injection] Workflow normalized with credentials injected');
+                
+                const workflowData = {
+                    name: (analysis?.summary && typeof analysis.summary === 'string') 
+                        ? analysis.summary.substring(0, 50) 
+                        : 'AI Generated Workflow',
+                    nodes: normalized.nodes,
+                    edges: normalized.edges,
+                    user_id: user?.id,
+                    updated_at: new Date().toISOString(),
+                };
+                
+                const { data: savedWorkflow, error: saveError } = await supabase
+                    .from('workflows')
+                    .insert(workflowData)
+                    .select()
+                    .single();
+                
+                if (saveError) {
+                    throw saveError;
+                }
+                
+                if (savedWorkflow?.id) {
+                    stateManager.setWorkflowBlueprint({ nodes: normalized.nodes, edges: normalized.edges });
+                    const readyResult = stateManager.markWorkflowReady();
+                    if (!readyResult.success) {
+                        console.warn('[StateManager] Warning:', readyResult.error);
+                    }
+                    
+                    setGeneratedWorkflowId(savedWorkflow.id);
+                    setNodes(normalized.nodes);
+                    setEdges(normalized.edges);
+                    setPendingWorkflowData(null); // Clear pending data
+                    setProgress(100);
+                    setIsComplete(true);
+                    setStep('complete');
+                    toast({
+                        title: 'Workflow Created',
+                        description: 'Workflow has been saved successfully!',
+                    });
+                    return; // Exit early - workflow is saved
+                }
+            } catch (err: any) {
+                console.error('Error saving pending workflow:', err);
+                toast({
+                    title: 'Error',
+                    description: 'Failed to save workflow: ' + (err.message || 'Unknown error'),
+                    variant: 'destructive',
+                });
+                // Fall through to rebuild if save fails
+            }
+        }
+        
         // REMOVED: State verification - just proceed directly
         
         // Set provided credentials in state manager (non-blocking)
@@ -921,12 +1256,12 @@ export function AutonomousAgentWizard() {
                 // Pass requirements metadata so backend can intelligently fill fields
                 requirements: refinement?.requirements || {},
                 requirementsMode: 'manual', // Always manual - user provides credentials directly
-                // Include all requirement values
-                urls: refinement.requirements?.urls || [],
-                apis: refinement.requirements?.apis || [],
-                credentials: refinement.requirements?.credentials || [],
-                schedules: refinement.requirements?.schedules || [],
-                platforms: refinement.requirements?.platforms || [],
+                // Include all requirement values (with null safety)
+                urls: refinement?.requirements?.urls || [],
+                apis: refinement?.requirements?.apis || [],
+                credentials: refinement?.requirements?.credentials || [],
+                schedules: refinement?.requirements?.schedules || [],
+                platforms: refinement?.requirements?.platforms || [],
             };
 
             // Get Supabase URL and session token
@@ -1042,11 +1377,25 @@ export function AutonomousAgentWizard() {
                                     });
                                     
                                     if (missingCreds.length > 0) {
-                                        setRequiredCredentials(missingCreds);
+                                        // Normalize credentials
+                                        const normalizedCreds = missingCreds.map((cred: string) => normalizeCredentialName(cred));
+                                        const uniqueCreds = [...new Set(normalizedCreds)];
+                                        
+                                        // Store the built workflow data if available (nodes/edges might be in the update)
+                                        const workflowNodes = update.nodes || update.workflow?.nodes || [];
+                                        const workflowEdges = update.edges || update.workflow?.edges || [];
+                                        if (workflowNodes.length > 0 || workflowEdges.length > 0) {
+                                            setPendingWorkflowData({ nodes: workflowNodes, edges: workflowEdges, update });
+                                        }
+                                        
+                                        // Update state manager BEFORE setting React state
+                                        stateManager.setRequiredCredentials(uniqueCreds);
+                                        
+                                        setRequiredCredentials(uniqueCreds);
                                         setShowCredentialStep(true);
                                         setStep('credentials'); // New step for credential collection
                                         stopFallbackProgress();
-                                        setBuildingLogs(prev => [...prev, `⚠️ ${missingCreds.length} credential(s) required`]);
+                                        setBuildingLogs(prev => [...prev, `⚠️ ${uniqueCreds.length} credential(s) required`]);
                                         return; // Don't complete yet, wait for credentials
                                     }
                                 } else {
@@ -1083,19 +1432,59 @@ export function AutonomousAgentWizard() {
                                         
                                         // Only show credentials step if we have missing creds AND haven't shown it before
                                         if (missingCreds.length > 0) {
-                                            // Deduplicate credentials before setting
-                                            const uniqueMissingCreds = [...new Set(missingCreds)];
+                                            // Deduplicate and normalize credentials before setting
+                                            const normalizedCreds = missingCreds.map((cred: string) => normalizeCredentialName(cred));
+                                            const uniqueMissingCreds = [...new Set(normalizedCreds)];
+                                            
+                                            // Update state manager BEFORE setting React state
+                                            stateManager.setRequiredCredentials(uniqueMissingCreds);
+                                            
                                             setRequiredCredentials(uniqueMissingCreds);
                                             setShowCredentialStep(true);
                                             setStep('credentials'); // New step for credential collection
                                             stopFallbackProgress();
-                                            setBuildingLogs(prev => [...prev, `⚠️ ${missingCreds.length} credential(s) required`]);
+                                            setBuildingLogs(prev => [...prev, `⚠️ ${uniqueMissingCreds.length} credential(s) required`]);
                                             return; // Don't complete yet, wait for credentials
                                         }
                                     }
                                 }
                             }
                             // If credentials were already provided or step is not 'building', continue with workflow generation
+                            
+                            // CRITICAL: Check if credentials are still required before completing
+                            // This handles the case where credentials are detected in the final completion update
+                            if (isCompleted && update.requiredCredentials !== undefined && Array.isArray(update.requiredCredentials) && update.requiredCredentials.length > 0) {
+                                const missingCreds = update.requiredCredentials.filter((cred: string) => {
+                                    const credLower = cred.toLowerCase();
+                                    const provided = Object.keys(config).some(key => 
+                                        key.toLowerCase().includes(credLower.replace(/_/g, '').replace(/api|key|token/gi, ''))
+                                    );
+                                    return !provided;
+                                });
+                                
+                                if (missingCreds.length > 0) {
+                                    // Normalize credentials
+                                    const normalizedCreds = missingCreds.map((cred: string) => normalizeCredentialName(cred));
+                                    const uniqueCreds = [...new Set(normalizedCreds)];
+                                    
+                                    // Store the built workflow data before returning (so we can save it after credentials are provided)
+                                    const workflowNodes = nodes || [];
+                                    const workflowEdges = edges || [];
+                                    if (workflowNodes.length > 0 || workflowEdges.length > 0) {
+                                        setPendingWorkflowData({ nodes: workflowNodes, edges: workflowEdges, update });
+                                    }
+                                    
+                                    // Update state manager BEFORE setting React state
+                                    stateManager.setRequiredCredentials(uniqueCreds);
+                                    
+                                    setRequiredCredentials(uniqueCreds);
+                                    setShowCredentialStep(true);
+                                    setStep('credentials');
+                                    stopFallbackProgress();
+                                    setBuildingLogs(prev => [...prev, `⚠️ ${uniqueCreds.length} credential(s) required`]);
+                                    return; // Don't complete yet, wait for credentials
+                                }
+                            }
                             
                             if (isCompleted) {
                                 // Stop fallback progress
@@ -1124,7 +1513,13 @@ export function AutonomousAgentWizard() {
                                     const { data: { user } } = await supabase.auth.getUser();
                                     const workflowNodes = nodes || [];
                                     const workflowEdges = edges || [];
-                                    const normalized = validateAndFixWorkflow({ nodes: workflowNodes, edges: workflowEdges });
+                                    
+                                    // Inject user-provided credentials into nodes if any were provided
+                                    const nodesWithCredentials = Object.keys(credentialValues).length > 0
+                                        ? injectCredentialsIntoNodes(workflowNodes, credentialValues)
+                                        : workflowNodes;
+                                    
+                                    const normalized = validateAndFixWorkflow({ nodes: nodesWithCredentials, edges: workflowEdges });
                                     
                                     // Execution Flow Architecture (STEP-2): Check for validation errors
                                     // If validation fixes were applied, we might have had errors
@@ -1700,11 +2095,16 @@ export function AutonomousAgentWizard() {
                                         </div>
 
                                         {/* System Prompt Preview - Show enhanced prompt if available */}
-                                        <div className="bg-muted/50 p-4 rounded-md border border-border">
-                                            <p className="text-sm text-muted-foreground mb-2">Final Enhanced Prompt:</p>
-                                            <p className="text-foreground leading-relaxed text-sm">
-                                                {refinement.enhancedPrompt || refinement.systemPrompt || 'No prompt available'}
+                                        <div className="bg-gradient-to-br from-muted/80 to-muted/40 p-5 rounded-lg border border-border/50 shadow-sm">
+                                            <p className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
+                                                <Sparkles className="h-4 w-4" />
+                                                Final Enhanced Prompt:
                                             </p>
+                                            <div className="prose prose-sm dark:prose-invert max-w-none">
+                                                <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap font-medium">
+                                                    {refinement.enhancedPrompt || refinement.systemPrompt || 'No prompt available'}
+                                                </p>
+                                            </div>
                                         </div>
 
                                         {/* Confirmation Buttons */}

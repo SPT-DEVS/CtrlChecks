@@ -31,7 +31,10 @@ export const ALLOWED_TRANSITIONS: Record<WorkflowGenerationState, WorkflowGenera
     WorkflowGenerationState.STATE_2_CLARIFICATION_ACTIVE, // Allow going back to edit
   ],
   [WorkflowGenerationState.STATE_4_CREDENTIAL_COLLECTION]: [WorkflowGenerationState.STATE_5_WORKFLOW_BUILDING],
-  [WorkflowGenerationState.STATE_5_WORKFLOW_BUILDING]: [WorkflowGenerationState.STATE_6_WORKFLOW_VALIDATION],
+  [WorkflowGenerationState.STATE_5_WORKFLOW_BUILDING]: [
+    WorkflowGenerationState.STATE_6_WORKFLOW_VALIDATION,
+    WorkflowGenerationState.STATE_4_CREDENTIAL_COLLECTION, // Allow going back to collect credentials if detected during building
+  ],
   [WorkflowGenerationState.STATE_6_WORKFLOW_VALIDATION]: [
     WorkflowGenerationState.STATE_7_WORKFLOW_READY,
     WorkflowGenerationState.STATE_5_WORKFLOW_BUILDING, // Retry building
@@ -199,8 +202,12 @@ export class WorkflowGenerationStateManager {
    */
   setRequiredCredentials(credentials: string[]): void {
     this.executionState.credentials_required = credentials;
+    // Transition to credential collection if we're in a state that allows it
     if (this.executionState.current_state === WorkflowGenerationState.STATE_3_UNDERSTANDING_CONFIRMED) {
       this.transitionTo(WorkflowGenerationState.STATE_4_CREDENTIAL_COLLECTION, 'Credentials required identified');
+    } else if (this.executionState.current_state === WorkflowGenerationState.STATE_5_WORKFLOW_BUILDING) {
+      // If credentials are detected during building, go back to credential collection
+      this.transitionTo(WorkflowGenerationState.STATE_4_CREDENTIAL_COLLECTION, 'Credentials required detected during building');
     }
   }
 

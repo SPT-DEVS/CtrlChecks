@@ -89,11 +89,11 @@ function applyHierarchicalLayout(nodes: any[], edges: any[]): any[] {
         nodesByLevel.get(level)!.push(nodeId);
     });
     
-    // Position nodes level by level
-    const nodeWidth = 250;
+    // Position nodes level by level with better spacing to prevent overlaps
+    const nodeWidth = 280; // Increased to account for wider nodes (AI Agent nodes are 280px)
     const nodeHeight = 150;
-    const horizontalSpacing = 300;
-    const verticalSpacing = 200;
+    const horizontalSpacing = 350; // Increased from 300 to prevent overlaps
+    const verticalSpacing = 220; // Increased from 200 to prevent overlaps
     
     let maxNodesInLevel = 0;
     nodesByLevel.forEach(nodeIds => {
@@ -112,6 +112,25 @@ function applyHierarchicalLayout(nodes: any[], edges: any[]): any[] {
             nodePositions.set(nodeId, { x, y });
         });
     });
+    
+    // Check for and fix any overlapping nodes
+    const positionArray = Array.from(nodePositions.entries());
+    for (let i = 0; i < positionArray.length; i++) {
+        const [nodeId1, pos1] = positionArray[i];
+        for (let j = i + 1; j < positionArray.length; j++) {
+            const [nodeId2, pos2] = positionArray[j];
+            const distanceX = Math.abs(pos1.x - pos2.x);
+            const distanceY = Math.abs(pos1.y - pos2.y);
+            
+            // If nodes are too close (overlapping), adjust position
+            if (distanceX < nodeWidth && distanceY < nodeHeight) {
+                // Move node2 to the right
+                const newX = pos1.x + nodeWidth + 50; // Extra 50px padding
+                nodePositions.set(nodeId2, { x: newX, y: pos2.y });
+                positionArray[j] = [nodeId2, { x: newX, y: pos2.y }];
+            }
+        }
+    }
     
     // Apply positions to nodes - preserve existing valid positions, use layout for others
     return nodes.map(node => {
