@@ -293,23 +293,50 @@ function WorkflowCanvasInner() {
         console.log(`  Target: "${edge.targetHandle || 'none'}" → "${normalizedTargetHandle}" (node: ${targetNodeType})`);
       }
 
-      // Determine edge color based on execution status
-      let edgeColor = '#6366f1'; // Default indigo (more visible)
-      let strokeWidth = 2.5;
+      // Check if edge is selected
+      const isSelected = selectedEdge?.id === edge.id;
 
+      // Determine edge color based on execution status
+      // Use calm, light colors for default state
+      // Green/Red for success/fail as requested
+      let edgeColor = '#94a3b8'; // Calm light gray-blue (slate-400)
+      let strokeWidth = 2.5; // Moderate width for calm appearance
+
+      // Priority: Check execution status for green/red colors
       if (sourceNode?.data?.executionStatus === 'success' && targetNode?.data?.executionStatus !== 'error') {
-        // Green for successful execution path
-        edgeColor = '#22c55e'; // green-500
+        // Green for successful execution path - soft green
+        edgeColor = '#4ade80'; // green-400 (softer than green-500)
         strokeWidth = 3;
       } else if (sourceNode?.data?.executionStatus === 'error' || targetNode?.data?.executionStatus === 'error') {
-        // Red for error path
-        edgeColor = '#ef4444'; // red-500
+        // Red for error path - soft red
+        edgeColor = '#f87171'; // red-400 (softer than red-500)
         strokeWidth = 3;
       } else if (sourceNode?.data?.executionStatus === 'running' || targetNode?.data?.executionStatus === 'running') {
-        // Blue for running
-        edgeColor = '#3b82f6'; // blue-500
+        // Light blue for running
+        edgeColor = '#60a5fa'; // blue-400 (calm blue)
         strokeWidth = 2.5;
       }
+
+      // Make selected edges slightly more visible but still calm
+      if (isSelected) {
+        strokeWidth = 3;
+        edgeColor = '#64748b'; // Slightly darker slate for selected
+      }
+
+      // Add very subtle shadow for calm appearance
+      const edgeStyle: React.CSSProperties = {
+        stroke: edgeColor,
+        strokeWidth,
+        opacity: 0.9, // Slightly transparent for calm look
+        filter: isSelected 
+          ? 'drop-shadow(0 1px 2px rgba(100, 116, 139, 0.2))' // Subtle shadow for selected
+          : 'drop-shadow(0 1px 1px rgba(0, 0, 0, 0.08))', // Very subtle shadow
+        ...edge.style,
+      };
+
+      // Determine if edge represents success or error path
+      const isSuccess = sourceNode?.data?.executionStatus === 'success' && targetNode?.data?.executionStatus !== 'error';
+      const isError = sourceNode?.data?.executionStatus === 'error' || targetNode?.data?.executionStatus === 'error';
 
       return {
         ...edge,
@@ -319,17 +346,20 @@ function WorkflowCanvasInner() {
         sourceHandle: normalizedSourceHandle,
         targetHandle: normalizedTargetHandle,
         type: edge.type || 'default',
-        style: {
-          stroke: edgeColor,
-          strokeWidth,
-          opacity: 1, // Ensure visible
-          ...edge.style,
-        },
+        style: edgeStyle,
         animated: sourceNode?.data?.executionStatus === 'running',
-        zIndex: 1, // Ensure above background
+        selected: isSelected, // Mark as selected for React Flow styling
+        data: {
+          ...edge.data,
+          success: isSuccess,
+          error: isError,
+        },
+        zIndex: isSelected ? 10 : 1, // Higher z-index for selected edges
         markerEnd: {
           type: 'arrowclosed' as const,
           color: edgeColor,
+          width: isSelected ? 20 : 18, // Calm size for arrows
+          height: isSelected ? 20 : 18,
         },
       };
     }).filter(Boolean); // Remove null edges
@@ -341,6 +371,59 @@ function WorkflowCanvasInner() {
     ? nodes.map(n => n.id).sort().join(',') 
     : 'empty';
   
+  // Check for and fix overlapping nodes when workflow loads
+  useEffect(() => {
+    if (nodes.length === 0) return;
+    
+    const NODE_WIDTH = 280;
+    const NODE_HEIGHT = 150;
+    const MIN_SPACING = 10; // Reduced from 50 - only detect actual overlaps, not close nodes
+    
+    let hasOverlaps = false;
+    const adjustedNodes = nodes.map((node, index) => {
+      let newPosition = { ...node.position };
+      
+      // Check for overlaps with other nodes
+      // Only detect actual overlaps (nodes touching or overlapping), not just close nodes
+      for (let i = 0; i < index; i++) {
+        const otherNode = nodes[i];
+        const distanceX = Math.abs(newPosition.x - otherNode.position.x);
+        const distanceY = Math.abs(newPosition.y - otherNode.position.y);
+        
+        // Only adjust if nodes are actually overlapping (distance less than node size)
+        // Reduced threshold to only catch true overlaps
+        if (distanceX < NODE_WIDTH - MIN_SPACING && distanceY < NODE_HEIGHT - MIN_SPACING) {
+          hasOverlaps = true;
+          // Move node to the right and down
+          newPosition.x = otherNode.position.x + NODE_WIDTH + MIN_SPACING;
+          if (distanceY < NODE_HEIGHT - MIN_SPACING) {
+            newPosition.y = otherNode.position.y + NODE_HEIGHT + MIN_SPACING;
+          }
+        }
+      }
+      
+      return {
+        ...node,
+        position: newPosition,
+      };
+    });
+    
+    // If overlaps were found, update nodes (only once per workflow load)
+    if (hasOverlaps && workflowKey !== 'empty') {
+      const timeoutId = setTimeout(() => {
+        adjustedNodes.forEach(node => {
+          onNodesChange([{
+            id: node.id,
+            type: 'position',
+            position: node.position,
+          }]);
+        });
+      }, 300);
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [workflowKey, nodes, onNodesChange]);
+
   // Fit view when nodes are loaded or workflow changes
   useEffect(() => {
     if (nodes.length > 0) {
@@ -383,6 +466,20 @@ function WorkflowCanvasInner() {
         deleteKeyCode={null}
         multiSelectionKeyCode={null}
         connectOnClick={false}
+        defaultEdgeOptions={{
+          type: 'default',
+          style: {
+            stroke: '#94a3b8', // Calm light gray-blue default
+            strokeWidth: 2.5,
+            opacity: 0.9,
+          },
+          markerEnd: {
+            type: 'arrowclosed',
+            color: '#94a3b8',
+            width: 18,
+            height: 18,
+          },
+        }}
       >
         <Background gap={16} size={1} className="!bg-muted/50" />
         <Controls className="!bg-card !border-border !shadow-md [&>button]:!bg-card [&>button]:!border-border [&>button]:!text-foreground [&>button:hover]:!bg-muted" />

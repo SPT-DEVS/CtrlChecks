@@ -263,7 +263,47 @@
 }
 
 .react-flow__edge-path {
-  stroke-width: 2;
+  stroke-width: 2.5 !important; /* Calm, moderate width */
+  opacity: 0.9 !important; /* Slightly transparent for calm look */
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.08)); /* Very subtle shadow */
+}
+
+/* Ensure edge markers (arrows) are visible with calm colors */
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke-width: 3 !important;
+  filter: drop-shadow(0 1px 2px rgba(100, 116, 139, 0.2)); /* Subtle shadow for selected */
+}
+
+/* Make edge markers calm and visible */
+.react-flow__arrowhead {
+  fill: #94a3b8 !important; /* Calm light gray-blue */
+  stroke: #94a3b8 !important;
+}
+
+/* Green edges for success - using inline style data attributes */
+.react-flow__edge[data-success="true"] .react-flow__edge-path,
+.react-flow__edge .react-flow__edge-path[data-success="true"] {
+  stroke: #4ade80 !important; /* Soft green */
+  stroke-width: 3 !important;
+}
+
+.react-flow__edge[data-success="true"] .react-flow__arrowhead,
+.react-flow__edge .react-flow__arrowhead[data-success="true"] {
+  fill: #4ade80 !important;
+  stroke: #4ade80 !important;
+}
+
+/* Red edges for errors */
+.react-flow__edge[data-error="true"] .react-flow__edge-path,
+.react-flow__edge .react-flow__edge-path[data-error="true"] {
+  stroke: #f87171 !important; /* Soft red */
+  stroke-width: 3 !important;
+}
+
+.react-flow__edge[data-error="true"] .react-flow__arrowhead,
+.react-flow__edge .react-flow__arrowhead[data-error="true"] {
+  fill: #f87171 !important;
+  stroke: #f87171 !important;
 }
 
 /* Force minimap nodes to use consistent dimensions */
