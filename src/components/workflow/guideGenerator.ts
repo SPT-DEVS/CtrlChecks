@@ -21,9 +21,13 @@ export function generateFieldGuide(
   fieldType: string,
   placeholder?: string
 ): FieldGuide {
-  const lowerKey = fieldKey.toLowerCase();
-  const lowerLabel = fieldLabel.toLowerCase();
-  const lowerPlaceholder = (placeholder || '').toLowerCase();
+  // ✅ PRODUCTION: Null-safe string operations
+  const normalizedKey = fieldKey?.toLowerCase?.() ?? "";
+  const normalizedLabel = fieldLabel?.toLowerCase?.() ?? "";
+  const normalizedPlaceholder = (placeholder?.toLowerCase?.() ?? "").toLowerCase();
+  const lowerKey = normalizedKey;
+  const lowerLabel = normalizedLabel;
+  const lowerPlaceholder = normalizedPlaceholder;
   const combined = `${lowerKey} ${lowerLabel} ${lowerPlaceholder}`;
   
   // CRITICAL: Check for Slack Bot Token FIRST (before any other checks)
@@ -1874,7 +1878,10 @@ function generateSMTPGuide(): FieldGuide {
 }
 
 function generateGenericGuide(fieldLabel: string, fieldType: string): FieldGuide {
-  const lowerLabel = fieldLabel.toLowerCase();
+  // ✅ PRODUCTION: Null-safe string operations
+  const normalizedLabel = fieldLabel?.toLowerCase?.() ?? "";
+  const normalizedType = fieldType?.toLowerCase?.() ?? "";
+  const lowerLabel = normalizedLabel;
   
   // Try to detect service from fieldLabel
   if (lowerLabel.includes('google sheets') || lowerLabel.includes('sheets')) {
@@ -1904,7 +1911,8 @@ function generateGenericGuide(fieldLabel: string, fieldType: string): FieldGuide
   // Check for Slack (general, not webhook)
   if (lowerLabel.includes('slack') && !lowerLabel.includes('webhook')) {
     // If it's a token field, use the detailed Bot Token guide
-    if (lowerLabel.includes('token') || lowerKey.includes('token')) {
+    // ✅ PRODUCTION: Use lowerLabel only (lowerKey not available in this function)
+    if (lowerLabel.includes('token')) {
       return {
         title: 'How to get Slack Bot Token?',
         url: 'https://api.slack.com/apps',

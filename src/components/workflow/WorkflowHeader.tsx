@@ -231,30 +231,30 @@ export default function WorkflowHeader({
         </Button>
 
         {isDirty && (
-          <Button
+          <WorkflowActionButton
             size="sm"
             variant="outline"
             className="border-primary/50 text-primary hover:bg-primary/10"
             onClick={() => onRun(true)}
             disabled={isRunning || isSaving || isScheduleActive}
-            title={isScheduleActive ? 'Manual Run is disabled when schedule is active' : 'Save and run workflow'}
+            tooltip={isScheduleActive ? 'Manual Run is disabled when schedule is active' : 'Save and run workflow'}
           >
             <Save className="mr-2 h-4 w-4" />
             <Play className="mr-2 h-4 w-4" />
             Save & Run
-          </Button>
+          </WorkflowActionButton>
         )}
 
-        <Button
+        <WorkflowActionButton
           size="sm"
           className="gradient-primary text-primary-foreground"
           onClick={() => onRun(false)}
           disabled={isRunning || isScheduleActive}
-          title={isScheduleActive ? 'Manual Run is disabled when schedule is active' : undefined}
+          tooltip={isScheduleActive ? 'Manual Run is disabled when schedule is active' : undefined}
         >
           <Play className="mr-2 h-4 w-4" />
           {isRunning ? 'Running...' : isScheduleActive ? 'Scheduled' : 'Run'}
-        </Button>
+        </WorkflowActionButton>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

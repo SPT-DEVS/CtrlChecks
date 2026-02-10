@@ -53,6 +53,46 @@ export interface ValidationResult {
   testCases: Array<{ name: string; recommended: boolean }>;
 }
 
+/**
+ * Check if a node is a trigger node
+ * Recognizes nodes by category === 'triggers' or known trigger types
+ */
+function isTriggerNode(node: Node): boolean {
+  const type = node.data?.type || node.type || '';
+  const category = node.data?.category || '';
+  
+  // ✅ PRIMARY: Check if node is in "triggers" category (any node from triggers category)
+  if (category.toLowerCase() === 'triggers' || category.toLowerCase() === 'trigger') {
+    return true;
+  }
+  
+  // ✅ SECONDARY: Check if type includes 'trigger'
+  if (type.includes('trigger')) {
+    return true;
+  }
+  
+  // ✅ TERTIARY: Check known trigger types (fallback for nodes without category)
+  const knownTriggerTypes = [
+    'manual_trigger',
+    'webhook',
+    'webhook_trigger_response',
+    'schedule',
+    'chat_trigger',
+    'error_trigger',
+    'interval',
+    'workflow_trigger',
+    'http_trigger',
+    'form_trigger',
+    'form',
+    'gmail_trigger',
+    'slack_trigger',
+    'discord_trigger',
+  ];
+  
+  return knownTriggerTypes.includes(type);
+}
+
+// Keep for backward compatibility (used in some places)
 const TRIGGER_NODE_TYPES = [
   'manual_trigger', 'webhook', 'webhook_trigger_response', 'schedule', 
   'chat_trigger', 'error_trigger', 'interval', 'workflow_trigger', 'http_trigger'
@@ -222,7 +262,7 @@ function validateDataFlow(nodes: Node[], edges: Edge[]): ValidationIssue[] {
   // Check for orphan nodes (except triggers)
   nodes.forEach(node => {
     const nodeType = (node.data as WorkflowNode['data']).type;
-    if (TRIGGER_NODE_TYPES.includes(nodeType)) {
+    if (isTriggerNode(node)) {
       return; // Triggers don't need inputs
     }
 
@@ -243,7 +283,7 @@ function validateDataFlow(nodes: Node[], edges: Edge[]): ValidationIssue[] {
   // Check for nodes with no outputs (dead ends)
   const nodesWithOutputs = new Set(edges.map(e => e.source));
   nodes.forEach(node => {
-    if (!nodesWithOutputs.has(node.id) && !TRIGGER_NODE_TYPES.includes((node.data as WorkflowNode['data']).type)) {
+    if (!nodesWithOutputs.has(node.id) && !isTriggerNode(node)) {
       issues.push({
         nodeId: node.id,
         nodeLabel: (node.data as WorkflowNode['data']).label,

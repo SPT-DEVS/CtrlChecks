@@ -21,6 +21,7 @@ export default function LinkedInConnectionStatus({
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [accountLabel, setAccountLabel] = useState<string | null>(null);
 
   const checkAuthStatus = useCallback(async () => {
     if (!user) {
@@ -55,6 +56,30 @@ export default function LinkedInConnectionStatus({
         const expiresAt = tokenData.expires_at ? new Date(tokenData.expires_at) : null;
         const now = new Date();
         setIsAuthenticated(expiresAt ? expiresAt > now : true);
+      }
+
+      // Fetch additional metadata via backend status endpoint (non-fatal)
+      try {
+        const authToken = (await supabase.auth.getSession()).data.session?.access_token;
+        if (authToken) {
+          const resp = await fetch('/api/connections/linkedin/status', {
+            headers: {
+              Authorization: `Bearer ${authToken}`,
+            },
+          });
+          if (resp.ok) {
+            const json = await resp.json();
+            if (json.connected && json.metadata?.scope) {
+              setAccountLabel(`LinkedIn Connected (${json.metadata.scope})`);
+            } else if (json.connected) {
+              setAccountLabel('LinkedIn Connected');
+            } else {
+              setAccountLabel(null);
+            }
+          }
+        }
+      } catch (metaErr) {
+        console.warn('LinkedIn status metadata fetch failed (non-fatal):', metaErr);
       }
     } catch (error) {
       console.error('Error checking LinkedIn auth status:', error);
@@ -101,7 +126,8 @@ export default function LinkedInConnectionStatus({
         options: {
           redirectTo: redirectUrl,
           queryParams: {
-            scope: 'openid profile email w_member_social w_organization_social',
+            // Request minimal required scopes for posting + basic profile/email
+            scope: 'r_liteprofile r_emailaddress w_member_social',
           },
         },
       });

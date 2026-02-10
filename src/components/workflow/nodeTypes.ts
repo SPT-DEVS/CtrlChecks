@@ -245,9 +245,18 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
     category: 'logic',
     icon: 'GitBranch',
     description: 'If/Else',
+    // ✅ CRITICAL: Keep UI simple (single condition field) but convert to conditions array on save
+    // The graphNormalizer will convert condition -> conditions array
     defaultConfig: { condition: '' },
     configFields: [
-      { key: 'condition', label: 'Condition', type: 'text', placeholder: '{{input.value}} > 10', required: true, helpText: 'JavaScript expression that evaluates to true or false. If true, execution follows the "True" branch; if false, follows the "False" branch. Examples: {{input.value}} > 10, {{input.status}} === "active", {{input.count}} >= 5' },
+      { 
+        key: 'condition', 
+        label: 'Condition', 
+        type: 'text', 
+        placeholder: '{{input.value}} > 10', 
+        required: true, 
+        helpText: 'JavaScript expression that evaluates to true or false. If true, execution follows the "True" branch; if false, follows the "False" branch. Examples: {{input.value}} > 10, {{input.status}} === "active", {{input.count}} >= 5' 
+      },
     ],
   },
   {
@@ -2275,6 +2284,35 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
     configFields: [
       { key: 'webhookUrl', label: 'Webhook URL', type: 'text', placeholder: 'https://hooks.slack.com/services/...', required: true, helpText: 'How to get Slack Webhook URL: 1) Go to api.slack.com/apps 2) Create a new app or select existing 3) Go to "Incoming Webhooks" 4) Activate webhooks 5) Click "Add New Webhook to Workspace" 6) Select channel 7) Copy webhook URL (starts with https://hooks.slack.com/services/) 8) Paste it here securely' },
       { key: 'text', label: 'Message Text', type: 'textarea', placeholder: 'Hello from CtrlChecks!', required: true, helpText: 'Simple message text to send to Slack. This is a simplified webhook node for basic text messages. For rich formatting, use the Slack Message node with Blocks. Supports template variables like {{input}}' },
+    ],
+  },
+  {
+    type: 'chat_send',
+    label: 'Chat Send',
+    category: 'output',
+    icon: 'Send',
+    description: 'Send message to chat interface',
+    defaultConfig: {
+      message: '',
+      sessionId: '',
+    },
+    configFields: [
+      { 
+        key: 'message', 
+        label: 'Message', 
+        type: 'textarea', 
+        placeholder: 'Hello! How can I help you?', 
+        required: true, 
+        helpText: 'Message to send to the chat interface. Supports template variables like {{input}} or {{chat_trigger.message}} to reference data from previous nodes.' 
+      },
+      { 
+        key: 'sessionId', 
+        label: 'Session ID (optional)', 
+        type: 'text', 
+        placeholder: '{{chat_trigger.sessionId}}', 
+        required: false, 
+        helpText: 'Chat session ID. If left empty, it will try to get the sessionId from the Chat Trigger node output. Connect this node to a Chat Trigger node to automatically get the session ID. You can also use template variables like {{chat_trigger.sessionId}} or {{executionId}}.' 
+      },
     ],
   },
   {

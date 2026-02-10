@@ -1,0 +1,60 @@
+# Vercel ignore file - files to exclude from deployment
+
+# Development files
+.env.local
+.env.*.local
+*.local
+
+# Test files
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+test_workflows/
+model-testing/
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Scripts (not needed in production)
+scripts/
+*.ps1
+*.sh
+*.bat
+
+# Docker files
+Dockerfile*
+docker-compose*.yml
+nginx*.conf
+
+# Cloudflare tunnel config
+cloudflare-tunnel-config.yml
+
+# SQL migrations (handled separately)
+sql_migrations/
+supabase/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Build artifacts (will be generated)
+dist/
+build/

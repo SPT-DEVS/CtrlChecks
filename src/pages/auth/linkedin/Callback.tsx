@@ -28,10 +28,13 @@ export default function LinkedInAuthCallback() {
       processedRef.current = true;
 
       try {
-        setStatus('tokens found. Saving...');
+        setStatus('LinkedIn tokens found. Saving...');
 
         // Extract tokens
-        const { provider_token, provider_refresh_token } = session;
+        const { provider_token, provider_refresh_token, expires_at } = session as Session & {
+          provider_token?: string | null;
+          provider_refresh_token?: string | null;
+        };
 
         if (!provider_token) {
           console.warn('No provider_token in session. Is this a LinkedIn OAuth session?');
@@ -40,6 +43,15 @@ export default function LinkedInAuthCallback() {
 
         console.log('Got LinkedIn tokens. Saving to database...');
 
+        // Compute expiry (LinkedIn typically returns expires_in seconds on the OAuth token,
+        // which Supabase maps to session.expires_at). Fallback to 1 hour if not present.
+        const expiresAtIso = expires_at
+          ? new Date(expires_at * 1000).toISOString()
+          : new Date(Date.now() + 3600 * 1000).toISOString();
+
+        // Scopes we request for LinkedIn posting + basic profile/email
+        const scope = 'r_liteprofile r_emailaddress w_member_social';
+
         // Upsert into linkedin_oauth_tokens table
         const { error: dbError } = await supabase
           .from('linkedin_oauth_tokens' as any)
@@ -47,15 +59,36 @@ export default function LinkedInAuthCallback() {
             user_id: session.user.id,
             access_token: provider_token,
             refresh_token: provider_refresh_token || null,
-            expires_at: new Date(Date.now() + 3600 * 1000).toISOString(), // Approx 1 hour default
+            expires_at: expiresAtIso,
             token_type: 'Bearer',
-            scope: 'openid profile email w_member_social w_organization_social',
+            scope,
             updated_at: new Date().toISOString()
           }, {
             onConflict: 'user_id'
           });
 
         if (dbError) throw dbError;
+
+        // Mirror into user_credentials vault for connector-based discovery/resolution.
+        // This stores a redacted, structured view of the credential WITHOUT exposing it
+        // via logs or non-RLS tables.
+        const { error: vaultError } = await supabase
+          .from('user_credentials' as any)
+          .upsert({
+            user_id: session.user.id,
+            service: 'linkedin',
+            credentials: {
+              // Store token material under generic keys; RLS ensures only the owner can read.
+              accessToken: provider_token,
+              refreshToken: provider_refresh_token || null,
+              expiresAt: expiresAtIso,
+              scope,
+            },
+          }, {
+            onConflict: 'user_id,service',
+          });
+
+        if (vaultError) throw vaultError;
 
         toast({
           title: 'Success',

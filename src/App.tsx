@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { AuthProvider } from "@/lib/auth";
+import { WorkflowAuthProvider } from "@/contexts/WorkflowAuthContext";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import Index from "./pages/Index";
@@ -28,6 +29,7 @@ import NotFound from "./pages/NotFound";
 import GoogleAuthCallback from "./pages/auth/google/Callback";
 import LinkedInAuthCallback from "./pages/auth/linkedin/Callback";
 import FormTrigger from "./pages/FormTrigger";
+import ChatTrigger from "./pages/ChatTrigger";
 import ModelTestingDashboard from "./pages/ModelTestingDashboard";
 import ModelTestPage from "./pages/ModelTestPage";
 import SchedulerInitializer from "./components/workflow/SchedulerInitializer";
@@ -51,10 +53,11 @@ const App = () => (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <AuthProvider>
-          <TooltipProvider>
-            <Toaster />
-            <Sonner />
-            <BrowserRouter
+          <WorkflowAuthProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Sonner />
+              <BrowserRouter
               future={{
                 v7_startTransition: true,
                 v7_relativeSplatPath: true,
@@ -81,6 +84,7 @@ const App = () => (
                 <Route path="/auth/google/callback" element={<GoogleAuthCallback />} />
                 <Route path="/auth/linkedin/callback" element={<LinkedInAuthCallback />} />
                 <Route path="/form/:workflowId/:nodeId" element={<FormTrigger />} />
+                <Route path="/chat/:workflowId/:nodeId" element={<ChatTrigger />} />
                 <Route path="/model-testing" element={<ModelTestingDashboard />} />
                 <Route path="/model-testing/:category/:model" element={<ModelTestPage />} />
                 <Route path="/privacy" element={<Privacy />} />
@@ -90,6 +94,7 @@ const App = () => (
               <ConnectionStatus />
             </BrowserRouter>
           </TooltipProvider>
+          </WorkflowAuthProvider>
         </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>

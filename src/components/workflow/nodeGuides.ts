@@ -180,77 +180,6 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
       example: '0.7'
     }
   },
-  google_gemini: {
-    apiKey: {
-      title: 'Google Gemini API Key – Step-by-Step',
-      url: 'https://aistudio.google.com/apikey',
-      steps: [
-        '1️⃣ Open Google AI Studio',
-        '   Go to 👉 https://aistudio.google.com/apikey',
-        '   Sign in with your Google account',
-        '',
-        '2️⃣ Create API Key',
-        '   Click "Create API Key"',
-        '   Select or create a Google Cloud project',
-        '',
-        '3️⃣ Copy API Key',
-        '   Copy the key immediately',
-        '   It starts with "AIza"',
-        '',
-        '4️⃣ Paste the Key',
-        '   Paste it into the API Key field above',
-        '',
-        'Example:',
-        'AIzaSyDxxxxxxxxxxxxxxxxxxxxx'
-      ],
-      example: 'AIzaSyDxxxxxxxxxxxxxxxxxxxxx'
-    },
-    model: {
-      title: 'How to choose Model?',
-      steps: [
-        'Select the Gemini model that fits your task.',
-        '',
-        'Options:',
-        '• gemini-2.5-pro – most capable',
-        '• gemini-2.5-flash – balanced',
-        '• gemini-2.5-flash-lite – fastest/cheapest'
-      ],
-      example: 'gemini-2.5-flash'
-    },
-    prompt: {
-      title: 'How to write System Prompt?',
-      steps: [
-        'System Prompt defines the AI’s role and behavior.',
-        '',
-        'Example:',
-        'You are a helpful assistant that summarizes text clearly.',
-        '',
-        'Tip: Be explicit about format and tone.'
-      ],
-      example: 'You are a helpful assistant that summarizes text clearly.'
-    },
-    temperature: {
-      title: 'How to set Temperature?',
-      steps: [
-        'Temperature controls creativity vs. determinism.',
-        '',
-        'Guidelines:',
-        '• 0.0–0.3 for factual tasks',
-        '• 0.7 for balanced output',
-        '• 1.0+ for creative tasks'
-      ],
-      example: '0.7'
-    },
-    memory: {
-      title: 'How to set Memory?',
-      steps: [
-        'Memory is the number of conversation turns remembered.',
-        '',
-        'Set higher values for longer context, lower for short tasks.'
-      ],
-      example: '10'
-    }
-  },
   anthropic_claude: {
     apiKey: {
       title: 'Anthropic Claude API Key – Step-by-Step',
@@ -555,46 +484,6 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
         'hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
       ],
       example: 'hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
-    }
-  },
-  ollama: {
-    serverUrl: {
-      title: 'Ollama Server URL – Step-by-Step',
-      steps: [
-        '1️⃣ For Local Development',
-        '   If running Ollama locally:',
-        '   • Default URL: http://localhost:11434',
-        '   • Make sure Ollama is running',
-        '   • Test with: curl http://localhost:11434/api/tags',
-        '',
-        '2️⃣ For AWS Production',
-        '   If using AWS hosted Ollama:',
-        '   • URL: http://ollama.ctrlchecks.ai:11434',
-        '   • Contact your administrator for access',
-        '   • Ensure network connectivity',
-        '',
-        '3️⃣ For Custom Server',
-        '   If you have a custom Ollama server:',
-        '   • Format: http://your-server-ip:11434',
-        '   • Or: https://your-domain.com:11434',
-        '   • Replace with your actual server address',
-        '',
-        '4️⃣ Verify Connection',
-        '   Test the URL in a browser or API client',
-        '   Should return Ollama API response',
-        '   Check firewall/network settings if needed',
-        '',
-        '5️⃣ Use the URL',
-        '   Paste the full URL into the field above',
-        '   Include protocol (http:// or https://)',
-        '   Include port number (:11434)',
-        '',
-        'Examples:',
-        'http://localhost:11434',
-        'http://ollama.ctrlchecks.ai:11434',
-        'https://your-server.com:11434'
-      ],
-      example: 'http://localhost:11434'
     }
   },
   embeddings: {
@@ -4036,110 +3925,6 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
       example: 'paging_token'
     }
   },
-  salesforce: {
-    instanceUrl: {
-      title: 'Salesforce Instance URL – Step-by-Step',
-      url: 'https://login.salesforce.com',
-      steps: [
-        '1️⃣ Log in to Salesforce',
-        '   Go to 👉 https://login.salesforce.com',
-        '   Sign in to your Salesforce account',
-        '',
-        '2️⃣ Get Instance URL',
-        '   After logging in, look at the URL',
-        '   Format: https://yourinstance.salesforce.com',
-        '   Or: https://yourinstance.my.salesforce.com',
-        '',
-        '3️⃣ Copy Instance URL',
-        '   Copy the full URL including https://',
-        '   Don\'t include paths after .com',
-        '',
-        '4️⃣ Use the Instance URL',
-        '   Paste it into the Instance URL field above',
-        '   You\'ll also need Access Token',
-        '',
-        'Examples:',
-        'https://yourinstance.salesforce.com',
-        'https://yourinstance.my.salesforce.com'
-      ],
-      example: 'https://yourinstance.salesforce.com'
-    },
-    accessToken: {
-      title: 'Salesforce OAuth2 Access Token – Step-by-Step',
-      url: 'https://developer.salesforce.com',
-      steps: [
-        '1️⃣ Create Connected App',
-        '   Go to 👉 https://developer.salesforce.com',
-        '   Or in Salesforce: Setup → App Manager',
-        '   Click "New Connected App"',
-        '',
-        '2️⃣ Configure Connected App',
-        '   Fill in app details',
-        '   Enable OAuth Settings',
-        '   Set Callback URL',
-        '   Select OAuth Scopes',
-        '',
-        '3️⃣ Get Consumer Key and Secret',
-        '   After saving, view app details',
-        '   Copy Consumer Key and Consumer Secret',
-        '',
-        '4️⃣ Generate Access Token',
-        '   Use OAuth 2.0 flow',
-        '   Or use Salesforce Workbench',
-        '   Or use Postman OAuth collection',
-        '',
-        '5️⃣ Copy Access Token',
-        '   After OAuth flow completes',
-        '   Copy the access_token from response',
-        '   ⚠️ Token expires - refresh when needed',
-        '',
-        '6️⃣ Store Securely',
-        '   Paste it into the Access Token field above',
-        '',
-        'Example:',
-        '00Dxx000000xxxx!AQEAQxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
-      ],
-      example: '00Dxx000000xxxx!AQEAQxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
-    }
-  },
-  zoho_crm: {
-    accessToken: {
-      title: 'Zoho CRM OAuth2 Access Token – Step-by-Step',
-      url: 'https://api-console.zoho.com',
-      steps: [
-        '1️⃣ Open Zoho API Console',
-        '   Go to 👉 https://api-console.zoho.com',
-        '   Sign in with your Zoho account',
-        '',
-        '2️⃣ Create Client',
-        '   Click "Add Client"',
-        '   Choose "Server-based Applications"',
-        '   Fill in details and set redirect URL',
-        '',
-        '3️⃣ Get Client ID and Secret',
-        '   After creating, copy Client ID',
-        '   Copy Client Secret',
-        '   You\'ll need these for OAuth',
-        '',
-        '4️⃣ Generate Access Token',
-        '   Use OAuth 2.0 authorization flow',
-        '   Or use Zoho OAuth Playground',
-        '   Complete the authorization',
-        '',
-        '5️⃣ Copy Access Token',
-        '   After OAuth completes',
-        '   Copy the access_token',
-        '   ⚠️ Token expires - use refresh token',
-        '',
-        '6️⃣ Store Securely',
-        '   Paste it into the Access Token field above',
-        '',
-        'Example:',
-        '1000.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
-      ],
-      example: '1000.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
-    }
-  },
   pipedrive: {
     apiToken: {
       title: 'Pipedrive API Token – Step-by-Step',
@@ -5057,39 +4842,6 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
         'Tip: Insert dynamic values like {{input.field}}.'
       ],
       example: 'New user registered successfully 🎉'
-    }
-  },
-  discord_webhook: {
-    webhookUrl: {
-      title: 'Discord Webhook URL – Step-by-Step',
-      steps: [
-        '1️⃣ Open Discord',
-        '   Open Discord app or web',
-        '   Go to your server',
-        '',
-        '2️⃣ Go to Server Settings',
-        '   Right-click on your server',
-        '   Click "Server Settings"',
-        '',
-        '3️⃣ Navigate to Integrations',
-        '   Click "Integrations" in left sidebar',
-        '   Click "Webhooks"',
-        '',
-        '4️⃣ Create Webhook',
-        '   Click "New Webhook"',
-        '   Give it a name',
-        '   Select channel',
-        '   Click "Copy Webhook URL"',
-        '',
-        '5️⃣ Store Securely',
-        '   Paste it into the Webhook URL field above',
-        '   Format: https://discord.com/api/webhooks/...',
-        '   Never share publicly',
-        '',
-        'Example:',
-        'https://discord.com/api/webhooks/123456789012345678/abcdefghijklmnopqrstuvwxyz1234567890abcdefghijklmnopqrstuvwxyz'
-      ],
-      example: 'https://discord.com/api/webhooks/123456789012345678/abcdefghijklmnopqrstuvwxyz1234567890abcdefghijklmnopqrstuvwxyz'
     }
   },
   microsoft_teams: {
@@ -7276,64 +7028,6 @@ export const NODE_GUIDES: Record<NodeType, Record<FieldKey, NodeGuide>> = {
         'Required for Create File, Update File, Delete File. Ignored for other operations.'
       ],
       example: 'Updated API documentation'
-    }
-  },
-  bitbucket: {
-    username: {
-      title: 'Bitbucket Username – Step-by-Step',
-      url: 'https://bitbucket.org',
-      steps: [
-        '1️⃣ Open Bitbucket',
-        '   Go to 👉 https://bitbucket.org',
-        '   Sign in to your account',
-        '',
-        '2️⃣ Go to Personal Settings',
-        '   Click your profile picture (top right)',
-        '   Click "Personal settings"',
-        '',
-        '3️⃣ Get Username',
-        '   Your username is shown in "Account settings"',
-        '   Or check your profile URL:',
-        '   bitbucket.org/USERNAME',
-        '',
-        '4️⃣ Use the Username',
-        '   Paste it into the Username field above',
-        '   Use username, not email',
-        '',
-        'Example:',
-        'your-username'
-      ],
-      example: 'your-username'
-    },
-    appPassword: {
-      title: 'Bitbucket App Password – Step-by-Step',
-      url: 'https://bitbucket.org',
-      steps: [
-        '1️⃣ Open Bitbucket',
-        '   Go to 👉 https://bitbucket.org',
-        '   Sign in to your account',
-        '',
-        '2️⃣ Go to App Passwords',
-        '   Click profile → "Personal settings"',
-        '   Click "App passwords" in left sidebar',
-        '',
-        '3️⃣ Create App Password',
-        '   Click "Create app password"',
-        '   Give it a label (e.g., "Workflow Integration")',
-        '   Select permissions (Repositories: Read/Write)',
-        '',
-        '4️⃣ Copy App Password',
-        '   ⚠️ IMPORTANT: Copy immediately!',
-        '   You won\'t see it again!',
-        '',
-        '5️⃣ Store Securely',
-        '   Paste it into the App Password field above',
-        '   Never share publicly',
-        '',
-        'Example:',
-        'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
-      ],
-      example: 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
     }
   },
   jenkins: {

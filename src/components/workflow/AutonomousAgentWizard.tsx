@@ -28,7 +28,106 @@ import {
     mapStateToWizardStep 
 } from '@/lib/workflow-generation-state';
 
-type WizardStep = 'idle' | 'analyzing' | 'questioning' | 'refining' | 'confirmation' | 'credentials' | 'building' | 'complete';
+/**
+ * Ensures proper state transitions before setting workflow blueprint.
+ * 
+ * This function enforces the FSM transition rules:
+ * - STATE_2_CLARIFICATION_ACTIVE → STATE_3_UNDERSTANDING_CONFIRMED → (STATE_4_CREDENTIAL_COLLECTION if needed) → STATE_5_WORKFLOW_BUILDING
+ * 
+ * @param stateManager - The state manager instance
+ * @param finalUnderstanding - The final understanding/prompt (for confirming understanding)
+ * @param requiredCredentials - Array of required credential names (to check if we need STATE_4)
+ */
+const ensureStateForBlueprint = (
+    stateManager: WorkflowGenerationStateManager, 
+    finalUnderstanding?: string,
+    requiredCredentials?: string[]
+) => {
+    const currentState = stateManager.getCurrentState();
+    const executionState = stateManager.getExecutionState();
+    
+    // STATE_2_CLARIFICATION_ACTIVE → STATE_3_UNDERSTANDING_CONFIRMED
+    if (currentState === WorkflowGenerationState.STATE_2_CLARIFICATION_ACTIVE) {
+        // First confirm understanding if not already done
+        if (!executionState.final_understanding && finalUnderstanding) {
+            const confirmResult = stateManager.confirmUnderstanding(finalUnderstanding);
+            if (!confirmResult.success) {
+                console.warn('[StateManager] Failed to confirm understanding:', confirmResult.error);
+                return; // Cannot proceed without understanding confirmation
+            }
+        }
+        // After confirmation, we'll be in STATE_3_UNDERSTANDING_CONFIRMED, so continue below
+    }
+    
+    // STATE_3_UNDERSTANDING_CONFIRMED → STATE_4_CREDENTIAL_COLLECTION (if credentials needed) → STATE_5_WORKFLOW_BUILDING
+    if (currentState === WorkflowGenerationState.STATE_3_UNDERSTANDING_CONFIRMED) {
+        // Check if credentials are required
+        const credsRequired = requiredCredentials || executionState.credentials_required || [];
+        const hasRequiredCreds = credsRequired.length > 0;
+        
+        if (hasRequiredCreds) {
+            // Credentials are required - MUST go through STATE_4_CREDENTIAL_COLLECTION first
+            // Ensure required credentials are set (this will transition to STATE_4 if we're in STATE_3)
+            if (executionState.credentials_required.length === 0) {
+                stateManager.setRequiredCredentials(credsRequired);
+            }
+            
+            // Re-check state after setRequiredCredentials (should now be STATE_4)
+            const newState = stateManager.getCurrentState();
+            const newExecutionState = stateManager.getExecutionState();
+            
+            // Check if credentials have been provided
+            const missingCreds = credsRequired.filter(cred => {
+                const normalizedCred = cred.toLowerCase().replace(/_/g, '_');
+                return !newExecutionState.credentials_provided[cred] && 
+                       !newExecutionState.credentials_provided[normalizedCred];
+            });
+            
+            if (missingCreds.length > 0) {
+                // Credentials are required but not provided - cannot proceed
+                console.error('[StateManager] Cannot build: Missing required credentials:', missingCreds);
+                throw new Error(`Cannot build workflow: Missing required credentials: ${missingCreds.join(', ')}`);
+            }
+            
+            // Credentials are provided - now we can transition to STATE_5
+            // If we're in STATE_4, transition to building
+            if (newState === WorkflowGenerationState.STATE_4_CREDENTIAL_COLLECTION) {
+                const buildResult = stateManager.startBuilding();
+                if (!buildResult.success) {
+                    console.error('[StateManager] Failed to start building:', buildResult.error);
+                    throw new Error(buildResult.error || 'Failed to start building workflow');
+                }
+            } else if (newState === WorkflowGenerationState.STATE_5_WORKFLOW_BUILDING) {
+                // Already in building state, nothing to do
+            } else {
+                // Unexpected state
+                console.error('[StateManager] Unexpected state after credential check:', newState);
+                throw new Error(`Unexpected state: ${newState}`);
+            }
+        } else {
+            // No credentials needed - can go directly to STATE_5_WORKFLOW_BUILDING
+            const buildResult = stateManager.startBuilding();
+            if (!buildResult.success) {
+                console.error('[StateManager] Failed to start building:', buildResult.error);
+                throw new Error(buildResult.error || 'Failed to start building workflow');
+            }
+        }
+    }
+    
+    // STATE_4_CREDENTIAL_COLLECTION → STATE_5_WORKFLOW_BUILDING
+    if (currentState === WorkflowGenerationState.STATE_4_CREDENTIAL_COLLECTION) {
+        const buildResult = stateManager.startBuilding();
+        if (!buildResult.success) {
+            console.error('[StateManager] Failed to start building:', buildResult.error);
+            throw new Error(buildResult.error || 'Failed to start building workflow');
+        }
+    }
+    
+    // If we're already in STATE_5_WORKFLOW_BUILDING or later, we're good
+    // No action needed
+};
+
+type WizardStep = 'idle' | 'analyzing' | 'questioning' | 'refining' | 'confirmation' | 'credentials' | 'building' | 'executing' | 'complete';
 
 interface AgentQuestion {
     id: string;
@@ -47,6 +146,25 @@ interface RefinementResult {
     refinedPrompt: string;
     systemPrompt?: string;
     enhancedPrompt?: string;
+    questions?: Array<{
+        id?: string;
+        text?: string;
+        label?: string;
+        question?: string;
+        fieldName?: string;
+        name?: string;
+        type?: string;
+        placeholder?: string;
+        helpText?: string;
+        required?: boolean;
+        nodeId?: string;
+        nodeLabel?: string;
+        category?: string;
+    }>;
+    workflow?: {
+        nodes: any[];
+        edges: any[];
+    };
     nodesNeedingConfig?: Array<{ nodeId: string; nodeType: string; properties: string[] }>;
     requirements?: {
         urls?: string[];
@@ -72,6 +190,7 @@ export function AutonomousAgentWizard() {
     const [requirementValues, setRequirementValues] = useState<Record<string, string>>({});
     const [requiredCredentials, setRequiredCredentials] = useState<string[]>([]);
     const [credentialValues, setCredentialValues] = useState<Record<string, string>>({});
+    const [inputValues, setInputValues] = useState<Record<string, string>>({});
     const [showCredentialStep, setShowCredentialStep] = useState(false);
     const [buildingLogs, setBuildingLogs] = useState<string[]>([]);
     const [generatedWorkflowId, setGeneratedWorkflowId] = useState<string | null>(null);
@@ -83,7 +202,19 @@ export function AutonomousAgentWizard() {
     const [cognitiveTextIndex, setCognitiveTextIndex] = useState(0);
     const [circleTextIndex, setCircleTextIndex] = useState(0);
     const [workflowUnderstandingConfirmed, setWorkflowUnderstandingConfirmed] = useState(false);
-    const [pendingWorkflowData, setPendingWorkflowData] = useState<{ nodes: any[], edges: any[], update: any } | null>(null);
+    const [pendingWorkflowData, setPendingWorkflowData] = useState<{ 
+        nodes: any[], 
+        edges: any[], 
+        update: any,
+        discoveredInputs?: any[],
+        discoveredCredentials?: any[]
+    } | null>(null);
+    // Auto-execution state
+    const [executionId, setExecutionId] = useState<string | null>(null);
+    const [executionStatus, setExecutionStatus] = useState<'idle' | 'running' | 'completed' | 'failed'>('idle');
+    const [executionResult, setExecutionResult] = useState<any>(null);
+    const [executionError, setExecutionError] = useState<string | null>(null);
+    const [executionProgress, setExecutionProgress] = useState(0);
     const { toast } = useToast();
     const { setNodes, setEdges } = useWorkflowStore();
     const { theme, toggleTheme } = useTheme();
@@ -122,6 +253,77 @@ export function AutonomousAgentWizard() {
             console.log('⚠️ Workflow ID is null');
         }
     }, [generatedWorkflowId]);
+
+    // ✅ Handle OAuth callback return - restore workflow state after OAuth connection
+    useEffect(() => {
+        const checkOAuthReturn = async () => {
+            // Check if we're returning from OAuth callback
+            const urlParams = new URLSearchParams(window.location.search);
+            const returnTo = urlParams.get('returnTo');
+            const oauthState = sessionStorage.getItem('pendingWorkflowAfterOAuth');
+            
+            if (oauthState && returnTo) {
+                try {
+                    const state = JSON.parse(oauthState);
+                    
+                    // Check if Google OAuth is now connected
+                    const { data: { user } } = await supabase.auth.getUser();
+                    if (user) {
+                        const { data: tokenData } = await supabase
+                            .from('google_oauth_tokens')
+                            .select('access_token, refresh_token, expires_at')
+                            .eq('user_id', user.id)
+                            .single();
+                        
+                        if (tokenData && tokenData.access_token) {
+                            // OAuth connected successfully - refresh credential check
+                            toast({
+                                title: 'Google Connected',
+                                description: 'Google account connected successfully! Refreshing credentials...',
+                            });
+                            
+                            // Remove returnTo from URL
+                            window.history.replaceState({}, '', window.location.pathname);
+                            
+                            // If we have pending workflow data, refresh credentials
+                            if (state.pendingWorkflowData && state.pendingWorkflowData.discoveredCredentials) {
+                                // Filter out Google OAuth from discovered credentials (now connected)
+                                const updatedCredentials = state.pendingWorkflowData.discoveredCredentials.filter(
+                                    (cred: any) => !(cred.provider === 'google' && cred.type === 'oauth')
+                                );
+                                
+                                // Update pending workflow data
+                                setPendingWorkflowData({
+                                    ...state.pendingWorkflowData,
+                                    discoveredCredentials: updatedCredentials,
+                                });
+                                
+                                // Update required credentials list
+                                setRequiredCredentials(
+                                    updatedCredentials.map((c: any) => c.vaultKey || c.credentialId)
+                                );
+                                
+                                // If no more credentials needed, allow proceeding
+                                if (updatedCredentials.length === 0) {
+                                    toast({
+                                        title: 'All Credentials Connected',
+                                        description: 'You can now continue building your workflow.',
+                                    });
+                                }
+                            }
+                            
+                            // Clear OAuth state
+                            sessionStorage.removeItem('pendingWorkflowAfterOAuth');
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error handling OAuth return:', error);
+                }
+            }
+        };
+        
+        checkOAuthReturn();
+    }, []);
 
     // Immediate scroll function for instant scrolling on submit
     const scrollImmediately = (stepRef: React.RefObject<HTMLDivElement>, fallbackScroll: number = 500) => {
@@ -277,6 +479,8 @@ export function AutonomousAgentWizard() {
         setStep('analyzing');
 
         try {
+            console.log('Submitting workflow prompt:', prompt);
+            console.log('Mode:', 'analyze');
             const response = await fetch(`${ENDPOINTS.itemBackend}/api/generate-workflow`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -285,7 +489,9 @@ export function AutonomousAgentWizard() {
 
             if (!response.ok) {
                 const error = await response.json().catch(() => ({ error: 'Analysis failed' }));
-                throw new Error(error.error || error.message || 'Analysis failed');
+                const errorMessage = error.error || error.message || error.details || 'Analysis failed';
+                console.error('[Analysis Error]', error);
+                throw new Error(errorMessage);
             }
 
             const data = await response.json();
@@ -299,6 +505,17 @@ export function AutonomousAgentWizard() {
             // Execution Flow Architecture (STEP-2): Update state manager
             stateManager.setClarifyingQuestions(data.questions);
             stateManager.setClarifyingAnswers(initialAnswers);
+            
+            // ⚡ AUTO-CONTINUE: If no questions or autoContinue flag is set, automatically proceed to refine/build
+            if (data.autoContinue || !data.questions || data.questions.length === 0) {
+                console.log('⚡ No questions returned or autoContinue flag set - auto-continuing to workflow generation');
+                setStep('questioning'); // Set briefly for UI consistency
+                // Immediately proceed to refine/build
+                setTimeout(() => {
+                    handleRefine();
+                }, 100); // Small delay to ensure state is set
+                return;
+            }
             
             setStep('questioning');
             // Ensure step 2 is visible after questions load
@@ -515,6 +732,9 @@ export function AutonomousAgentWizard() {
         })) || [];
 
         try {
+            console.log('Submitting workflow prompt:', prompt);
+            console.log('Mode:', 'refine');
+            console.log('Answers:', fa);
             const response = await fetch(`${ENDPOINTS.itemBackend}/api/generate-workflow`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -523,11 +743,40 @@ export function AutonomousAgentWizard() {
 
             if (!response.ok) {
                 const error = await response.json().catch(() => ({ error: 'Refinement failed' }));
-                throw new Error(error.error || error.message || 'Refinement failed');
+                const errorMessage = error.error || error.message || error.details || 'Refinement failed';
+                console.error('[Refinement Error]', error);
+                throw new Error(errorMessage);
             }
 
             const data = await response.json();
             setRefinement(data);
+            
+            // 🔒 STRUCTURAL FIX: Handle discovered credentials from credential discovery phase
+            // Backend now returns discoveredCredentials array with complete credential information
+            if (data.discoveredCredentials && Array.isArray(data.discoveredCredentials) && data.discoveredCredentials.length > 0) {
+                console.log('🔑 [Frontend] Discovered credentials from backend:', data.discoveredCredentials);
+                
+                // Extract credential names from discovered credentials
+                const discoveredCredNames = data.discoveredCredentials
+                    .filter((cred: any) => cred.required)
+                    .map((cred: any) => cred.vaultKey || cred.displayName);
+                
+                // Merge with legacy requiredCredentials for backward compatibility
+                const allCreds = Array.from(new Set([
+                    ...discoveredCredNames,
+                    ...(data.requiredCredentials || [])
+                ]));
+                
+                setRequiredCredentials(allCreds);
+                stateManager.setRequiredCredentials(allCreds);
+                
+                console.log('✅ [Frontend] Set required credentials from discovery:', allCreds);
+            } else if (data.requiredCredentials && Array.isArray(data.requiredCredentials)) {
+                // Fallback to legacy format
+                const detectedCredentials = data.requiredCredentials || [];
+                setRequiredCredentials(detectedCredentials);
+                stateManager.setRequiredCredentials(detectedCredentials);
+            }
             
             // CRITICAL FIX: Handle preview phase - show final prompt and allow node configuration
             if (data.phase === 'preview' && data.workflow) {
@@ -634,54 +883,9 @@ export function AutonomousAgentWizard() {
                 }
             }
             
-            // CRITICAL FIX: Handle phase-based responses correctly
-            // The backend now uses phases: configuration -> credentials -> complete
-            // Only ask for credentials AFTER workflow is built
-            
-            // Handle configuration phase - user needs to provide node configuration
-            if (data.phase === 'configuration') {
-                console.log('📋 [Frontend] Configuration phase - asking for node configuration');
-                console.log(`📋 [Frontend] Configuration questions: ${data.questions?.length || 0}`);
-                // Store partial workflow for display
-                if (data.partialWorkflow) {
-                    console.log('📊 [Frontend] Partial workflow received:', {
-                        nodes: data.partialWorkflow.nodes?.length || 0,
-                        edges: data.partialWorkflow.edges?.length || 0
-                    });
-                }
-                // Stay in refining step - user will answer configuration questions
-                // The next refine call will include these answers
-                setStep('refining');
-                toast({
-                    title: 'Configuration Required',
-                    description: `Please provide ${data.questions?.length || 0} configuration value(s) to continue`,
-                });
-                return; // Exit - wait for user to provide configuration
-            }
-            
-            // Handle credentials phase - workflow is built, now ask for runtime credentials
-            if (data.phase === 'credentials') {
-                console.log('🔑 [Frontend] Credentials phase - workflow built, asking for runtime credentials');
-                console.log('🔑 [Frontend] Required credentials:', data.requiredCredentials);
-                
-                // Workflow is already built - store it
-                if (data.partialWorkflow) {
-                    console.log('✅ [Frontend] Workflow built successfully:', {
-                        nodes: data.partialWorkflow.nodes?.length || 0,
-                        edges: data.partialWorkflow.edges?.length || 0
-                    });
-                }
-                
-                // Set credentials from backend
-                const detectedCredentials = data.requiredCredentials || [];
-                setRequiredCredentials(detectedCredentials);
-                stateManager.setRequiredCredentials(detectedCredentials);
-                
-                // Transition to credentials step
-                setStep('credentials');
-                scrollToStep(step3Ref, 300);
-                return; // Exit - wait for user to provide credentials
-            }
+            // ✅ PRODUCTION: Only handle phase === 'ready' - all configuration/credentials after generation
+            // Removed: phase === 'configuration' and phase === 'credentials' handling
+            // Backend now always returns phase === 'ready' with discoveredInputs and discoveredCredentials
             
             // Handle complete phase - workflow is fully built and ready
             if (data.phase === 'complete') {
@@ -725,8 +929,8 @@ export function AutonomousAgentWizard() {
 
                             if (savedWorkflow?.id) {
                                 setGeneratedWorkflowId(savedWorkflow.id);
-                                setNodes(normalized.nodes);
-                                setEdges(normalized.edges);
+                                setNodes(normalized.nodes as any[]);
+                                setEdges(normalized.edges as any[]);
                                 setProgress(100);
                                 setIsComplete(true);
                                 setStep('complete');
@@ -1107,41 +1311,152 @@ export function AutonomousAgentWizard() {
         });
     };
 
+    /**
+     * Auto-execute workflow after it's saved
+     */
+    const autoExecuteWorkflow = async (workflowId: string) => {
+        try {
+            console.log('🚀 Auto-executing workflow:', workflowId);
+            setExecutionStatus('running');
+            setExecutionProgress(0);
+            setExecutionError(null);
+            setStep('executing');
+            
+            // Get auth token
+            const { data: { session } } = await supabase.auth.getSession();
+            const headers: Record<string, string> = {
+                'Content-Type': 'application/json',
+            };
+            
+            if (session?.access_token) {
+                headers['Authorization'] = `Bearer ${session.access_token}`;
+            }
+            
+            // Start execution using distributed workflow engine
+            const response = await fetch(`${ENDPOINTS.itemBackend}/api/distributed-execute-workflow`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({
+                    workflowId,
+                    input: {} // Initial input - can be customized later
+                })
+            });
+            
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({ error: 'Failed to start execution' }));
+                throw new Error(error.error || 'Failed to start workflow execution');
+            }
+            
+            const data = await response.json();
+            const execId = data.execution_id;
+            
+            if (!execId) {
+                throw new Error('No execution ID returned');
+            }
+            
+            setExecutionId(execId);
+            setExecutionProgress(10);
+            
+            // Poll for execution status
+            const pollInterval = setInterval(async () => {
+                try {
+                    const statusResponse = await fetch(`${ENDPOINTS.itemBackend}/api/execution-status/${execId}`, {
+                        headers: session?.access_token ? {
+                            'Authorization': `Bearer ${session.access_token}`
+                        } : {}
+                    });
+                    
+                    if (!statusResponse.ok) {
+                        throw new Error('Failed to get execution status');
+                    }
+                    
+                    const statusData = await statusResponse.json();
+                    const status = statusData.status;
+                    
+                    // Update progress based on completed steps
+                    if (statusData.steps && Array.isArray(statusData.steps)) {
+                        const completedSteps = statusData.steps.filter((s: any) => s.status === 'completed').length;
+                        const totalSteps = statusData.steps.length;
+                        if (totalSteps > 0) {
+                            setExecutionProgress(10 + (completedSteps / totalSteps) * 80);
+                        }
+                    }
+                    
+                    if (status === 'completed') {
+                        clearInterval(pollInterval);
+                        setExecutionStatus('completed');
+                        setExecutionProgress(100);
+                        setExecutionResult(statusData);
+                        setStep('complete');
+                        toast({
+                            title: 'Workflow Executed Successfully',
+                            description: 'Your workflow has completed execution!',
+                        });
+                    } else if (status === 'failed' || status === 'error') {
+                        clearInterval(pollInterval);
+                        setExecutionStatus('failed');
+                        setExecutionError(statusData.error || 'Workflow execution failed');
+                        setStep('complete');
+                        toast({
+                            title: 'Execution Failed',
+                            description: statusData.error || 'Workflow execution encountered an error',
+                            variant: 'destructive',
+                        });
+                    }
+                } catch (pollError: any) {
+                    console.error('Error polling execution status:', pollError);
+                    // Continue polling on error
+                }
+            }, 2000); // Poll every 2 seconds
+            
+            // Timeout after 5 minutes
+            setTimeout(() => {
+                clearInterval(pollInterval);
+                if (executionStatus === 'running') {
+                    setExecutionStatus('failed');
+                    setExecutionError('Execution timeout - workflow took too long to complete');
+                    setStep('complete');
+                    toast({
+                        title: 'Execution Timeout',
+                        description: 'Workflow execution is taking longer than expected. Check execution status manually.',
+                        variant: 'destructive',
+                    });
+                }
+            }, 5 * 60 * 1000);
+            
+        } catch (err: any) {
+            console.error('Error auto-executing workflow:', err);
+            setExecutionStatus('failed');
+            setExecutionError(err.message || 'Failed to execute workflow');
+            setStep('complete');
+            toast({
+                title: 'Execution Failed',
+                description: err.message || 'Failed to start workflow execution',
+                variant: 'destructive',
+            });
+        }
+    };
+
     const handleBuild = async () => {
-        // Check if we have a pending workflow that was built but needs credentials
-        // If so, save it instead of rebuilding
-        if (pendingWorkflowData && step === 'credentials') {
-            console.log('✅ Using pending workflow data - saving workflow with provided credentials');
+        // ✅ PRODUCTION FLOW: Unified configuration submission (inputs + credentials)
+        if (pendingWorkflowData && step === 'configuration') {
+            console.log('✅ Submitting unified configuration (inputs + credentials)');
+            let savedWorkflow: any = null; // Declare outside try block for catch access
             try {
                 const { data: { user } } = await supabase.auth.getUser();
                 
-                // Inject user-provided credentials into nodes BEFORE normalizing
-                // This stores credentials in the node config (e.g., webhookUrl for slack_message)
-                // NOT as environment variables - credentials are stored per-workflow
-                console.log('[Credential Injection] Injecting credentials into pending workflow nodes');
-                const nodesWithCredentials = injectCredentialsIntoNodes(
-                    pendingWorkflowData.nodes, 
-                    credentialValues
-                );
-                
-                const normalized = validateAndFixWorkflow({ 
-                    nodes: nodesWithCredentials, 
-                    edges: pendingWorkflowData.edges 
-                });
-                
-                console.log('[Credential Injection] Workflow normalized with credentials injected');
-                
+                // First, save the workflow without inputs/credentials
                 const workflowData = {
                     name: (analysis?.summary && typeof analysis.summary === 'string') 
                         ? analysis.summary.substring(0, 50) 
                         : 'AI Generated Workflow',
-                    nodes: normalized.nodes,
-                    edges: normalized.edges,
+                    nodes: pendingWorkflowData.nodes,
+                    edges: pendingWorkflowData.edges,
                     user_id: user?.id,
                     updated_at: new Date().toISOString(),
                 };
                 
-                const { data: savedWorkflow, error: saveError } = await supabase
+                const { data: workflowResult, error: saveError } = await supabase
                     .from('workflows')
                     .insert(workflowData)
                     .select()
@@ -1151,34 +1466,181 @@ export function AutonomousAgentWizard() {
                     throw saveError;
                 }
                 
+                savedWorkflow = workflowResult; // Store for catch block access
+                
                 if (savedWorkflow?.id) {
+                    const { data: { session } } = await supabase.auth.getSession();
+                    
+                    // ✅ STEP 1: Attach inputs first (if any)
+                    let inputsResult: any = null;
+                    if (Object.keys(inputValues).length > 0) {
+                        console.log('📋 Attaching node inputs...');
+                        console.log('📋 Input values:', inputValues);
+                        
+                        const inputsResponse = await fetch(`${ENDPOINTS.itemBackend}/api/workflows/${savedWorkflow.id}/attach-inputs`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${session?.access_token || ''}`,
+                            },
+                            body: JSON.stringify({
+                                inputs: inputValues, // Format: { "nodeId_fieldName": "value" }
+                            }),
+                        });
+                        
+                        if (!inputsResponse.ok) {
+                            const errorData = await inputsResponse.json();
+                            console.error('❌ Attach inputs error:', errorData);
+                            // ✅ CRITICAL: Show backend error codes clearly
+                            const errorMessage = errorData.code 
+                                ? `${errorData.code}: ${errorData.message || errorData.error}`
+                                : errorData.details?.join(', ') || errorData.error || 'Failed to attach inputs';
+                            throw new Error(errorMessage);
+                        }
+                        
+                        inputsResult = await inputsResponse.json();
+                        console.log('✅ Inputs attached successfully:', inputsResult);
+                    } else {
+                        console.log('ℹ️ No inputs to attach');
+                    }
+                    
+                    // ✅ STEP 2: Attach credentials (if any) - NON-BLOCKING
+                    // If credential attachment fails, log warning but continue to workflow page
+                    let credentialsResult: any = null;
+                    if (Object.keys(credentialValues).length > 0) {
+                        console.log('🔑 Attaching credentials...');
+                        try {
+                            const credentialsResponse = await fetch(`${ENDPOINTS.itemBackend}/api/workflows/${savedWorkflow.id}/attach-credentials`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${session?.access_token || ''}`,
+                                },
+                                body: JSON.stringify({
+                                    credentials: credentialValues,
+                                }),
+                            });
+                            
+                            if (!credentialsResponse.ok) {
+                                const error = await credentialsResponse.json();
+                                // ✅ NON-BLOCKING: Log warning but don't throw - user can attach credentials later in workflow builder
+                                console.warn('⚠️ Credential attachment failed (non-blocking):', error.code || error.message || 'Unknown error');
+                                console.log('💡 User can attach credentials later in the workflow builder');
+                                // Don't throw - continue to workflow page
+                            } else {
+                                credentialsResult = await credentialsResponse.json();
+                                console.log('✅ Credentials attached successfully');
+                            }
+                        } catch (credError: any) {
+                            // ✅ NON-BLOCKING: Catch any network/parsing errors and continue
+                            console.warn('⚠️ Credential attachment error (non-blocking):', credError?.message || 'Unknown error');
+                            console.log('💡 User can attach credentials later in the workflow builder');
+                            // Don't throw - continue to workflow page
+                        }
+                    } else {
+                        console.log('ℹ️ No credentials to attach');
+                    }
+                    
+                    // ✅ CRITICAL: Always redirect even when no inputs or credentials are required
+                    // Backend will handle auto-run when workflow reaches ready_for_execution status
+                    
+                    // ✅ STEP 4: Fetch final workflow and redirect
+                    // Get the latest workflow state (after inputs and credentials)
+                    console.log('📥 Fetching final workflow state...');
+                    const finalWorkflowResponse = await fetch(`${ENDPOINTS.itemBackend}/api/workflows/${savedWorkflow.id}`, {
+                        headers: {
+                            'Authorization': `Bearer ${session?.access_token || ''}`,
+                        },
+                    });
+                    
+                    let finalWorkflow: any = null;
+                    if (finalWorkflowResponse.ok) {
+                        finalWorkflow = await finalWorkflowResponse.json();
+                        console.log('✅ Final workflow fetched:', finalWorkflow);
+                    } else {
+                        console.warn('⚠️ Could not fetch final workflow, using credentials result');
+                        // Fallback to credentials result or inputs result
+                        if (credentialsResult?.workflow) {
+                            finalWorkflow = credentialsResult.workflow;
+                        } else {
+                            // Use saved workflow as fallback
+                            finalWorkflow = savedWorkflow;
+                        }
+                    }
+                    
+                    // ✅ CRITICAL: Parse and normalize workflow graph before state update
+                    const workflowGraph = typeof finalWorkflow.graph === 'string' 
+                        ? JSON.parse(finalWorkflow.graph) 
+                        : finalWorkflow.graph || finalWorkflow;
+                    
+                    // ✅ CRITICAL: Normalize graph before state update
+                    const normalized = validateAndFixWorkflow({ 
+                        nodes: workflowGraph?.nodes || finalWorkflow.nodes || [], 
+                        edges: workflowGraph?.edges || finalWorkflow.edges || []
+                    });
+                    
+                    // Fix state transitions
+                    ensureStateForBlueprint(
+                        stateManager, 
+                        refinement?.refinedPrompt || refinement?.systemPrompt || prompt,
+                        requiredCredentials
+                    );
+                    
                     stateManager.setWorkflowBlueprint({ nodes: normalized.nodes, edges: normalized.edges });
+                    
                     const readyResult = stateManager.markWorkflowReady();
                     if (!readyResult.success) {
                         console.warn('[StateManager] Warning:', readyResult.error);
                     }
                     
                     setGeneratedWorkflowId(savedWorkflow.id);
-                    setNodes(normalized.nodes);
-                    setEdges(normalized.edges);
-                    setPendingWorkflowData(null); // Clear pending data
+                    setNodes(normalized.nodes as any[]);
+                    setEdges(normalized.edges as any[]);
+                    setPendingWorkflowData(null);
                     setProgress(100);
                     setIsComplete(true);
-                    setStep('complete');
+                    
                     toast({
                         title: 'Workflow Created',
-                        description: 'Workflow has been saved successfully!',
+                        description: 'Your workflow has been created and configured!',
                     });
-                    return; // Exit early - workflow is saved
+                    
+                    // ✅ CRITICAL: Always redirect to workflow view after successful configuration
+                    console.log('🔄 Redirecting to workflow view...');
+                    navigate(`/workflows`);
+                    setTimeout(() => {
+                        navigate(`/workflow/${savedWorkflow.id}`, { replace: true });
+                    }, 500);
+                    return;
                 }
             } catch (err: any) {
-                console.error('Error saving pending workflow:', err);
+                console.error('Error saving workflow with configuration:', err);
+                
+                // ✅ CRITICAL: Even if credential attachment fails, redirect to workflow page
+                // User can attach credentials later in the workflow builder
+                if (savedWorkflow?.id) {
+                    console.log('⚠️ Configuration had errors, but workflow was saved. Redirecting to workflow page...');
+                    toast({
+                        title: 'Workflow Created',
+                        description: 'Workflow created! You can configure credentials in the workflow builder.',
+                    });
+                    
+                    // Still redirect to workflow page - user can fix issues there
+                    navigate(`/workflows`);
+                    setTimeout(() => {
+                        navigate(`/workflow/${savedWorkflow.id}`, { replace: true });
+                    }, 500);
+                    return;
+                }
+                
+                // Only show error and stay in modal if workflow wasn't saved
                 toast({
                     title: 'Error',
                     description: 'Failed to save workflow: ' + (err.message || 'Unknown error'),
                     variant: 'destructive',
                 });
-                // Fall through to rebuild if save fails
+                // Stay in modal - don't reset wizard
+                return;
             }
         }
         
@@ -1257,18 +1719,18 @@ export function AutonomousAgentWizard() {
                 requirements: refinement?.requirements || {},
                 requirementsMode: 'manual', // Always manual - user provides credentials directly
                 // Include all requirement values (with null safety)
-                urls: refinement?.requirements?.urls || [],
-                apis: refinement?.requirements?.apis || [],
-                credentials: refinement?.requirements?.credentials || [],
-                schedules: refinement?.requirements?.schedules || [],
-                platforms: refinement?.requirements?.platforms || [],
+                urls: (refinement?.requirements && !Array.isArray(refinement.requirements) && refinement.requirements.urls) ? refinement.requirements.urls : [],
+                apis: (refinement?.requirements && !Array.isArray(refinement.requirements) && refinement.requirements.apis) ? refinement.requirements.apis : [],
+                credentials: (refinement?.requirements && !Array.isArray(refinement.requirements) && refinement.requirements.credentials) ? refinement.requirements.credentials : [],
+                schedules: (refinement?.requirements && !Array.isArray(refinement.requirements) && refinement.requirements.schedules) ? refinement.requirements.schedules : [],
+                platforms: (refinement?.requirements && !Array.isArray(refinement.requirements) && refinement.requirements.platforms) ? refinement.requirements.platforms : [],
             };
 
             // Get Supabase URL and session token
             const { data: { session } } = await supabase.auth.getSession();
             
-            // Determine the prompt to use: check refinement.prompt, refinement.refinedPrompt, or fallback to original prompt
-            const finalPrompt = refinement?.prompt || refinement?.refinedPrompt || prompt;
+            // Determine the prompt to use: check refinement.refinedPrompt, or fallback to original prompt
+            const finalPrompt = refinement?.refinedPrompt || prompt;
             
             if (!finalPrompt || !finalPrompt.trim()) {
                 throw new Error('Prompt is required. Please provide a workflow description.');
@@ -1331,6 +1793,9 @@ export function AutonomousAgentWizard() {
                                 });
                             }
 
+                            // ✅ REMOVED: Configuration phase handling in streaming
+                            // Backend no longer returns phase === 'configuration' before generation completes
+
                             // Handle progress updates
                             if (update.current_phase) {
                                 // Stop fallback progress when we get real updates
@@ -1355,136 +1820,21 @@ export function AutonomousAgentWizard() {
                                 });
                             }
 
+                            // ✅ REMOVED: Configuration phase handling in streaming
+                            // Backend no longer returns phase === 'configuration' before generation completes
+
                             // Handle completion - check multiple possible completion indicators
                             // Support both direct structure (update.nodes) and nested structure (update.workflow.nodes)
                             const nodes = update.nodes || update.workflow?.nodes;
                             const edges = update.edges || update.workflow?.edges;
                             const hasNodes = nodes && Array.isArray(nodes) && nodes.length > 0;
                             const hasEdges = edges && Array.isArray(edges);
-                            const isCompleted = update.status === 'completed' || update.status === 'success' || update.success === true || (hasNodes && hasEdges);
+                            // ✅ PRODUCTION: Only mark completed when phase === 'ready' (generation complete)
+                            const isCompleted = (update.status === 'completed' || update.status === 'success' || update.success === true || (hasNodes && hasEdges)) 
+                                && update.phase === 'ready';
                             
-                            // Check for required credentials BEFORE completion
-                            // CRITICAL FIX: Trust backend even if it returns empty array (means no credentials needed)
-                            if (update.requiredCredentials !== undefined && Array.isArray(update.requiredCredentials)) {
-                                if (update.requiredCredentials.length > 0) {
-                                    const missingCreds = update.requiredCredentials.filter((cred: string) => {
-                                        // Check if credential is provided in config
-                                        const credLower = cred.toLowerCase();
-                                        const provided = Object.keys(config).some(key => 
-                                            key.toLowerCase().includes(credLower.replace(/_/g, '').replace(/api|key|token/gi, ''))
-                                        );
-                                        return !provided;
-                                    });
-                                    
-                                    if (missingCreds.length > 0) {
-                                        // Normalize credentials
-                                        const normalizedCreds = missingCreds.map((cred: string) => normalizeCredentialName(cred));
-                                        const uniqueCreds = [...new Set(normalizedCreds)];
-                                        
-                                        // Store the built workflow data if available (nodes/edges might be in the update)
-                                        const workflowNodes = update.nodes || update.workflow?.nodes || [];
-                                        const workflowEdges = update.edges || update.workflow?.edges || [];
-                                        if (workflowNodes.length > 0 || workflowEdges.length > 0) {
-                                            setPendingWorkflowData({ nodes: workflowNodes, edges: workflowEdges, update });
-                                        }
-                                        
-                                        // Update state manager BEFORE setting React state
-                                        stateManager.setRequiredCredentials(uniqueCreds);
-                                        
-                                        setRequiredCredentials(uniqueCreds);
-                                        setShowCredentialStep(true);
-                                        setStep('credentials'); // New step for credential collection
-                                        stopFallbackProgress();
-                                        setBuildingLogs(prev => [...prev, `⚠️ ${uniqueCreds.length} credential(s) required`]);
-                                        return; // Don't complete yet, wait for credentials
-                                    }
-                                } else {
-                                    // Backend says no credentials needed - clear any frontend-detected credentials
-                                    if (requiredCredentials.length > 0) {
-                                        console.log('✅ Backend confirmed no credentials needed - clearing frontend-detected credentials');
-                                        setRequiredCredentials([]);
-                                    }
-                                    
-                                    // CRITICAL: Only check on first update, not after credentials have been provided
-                                    // This prevents refresh loop where workflow keeps asking for credentials
-                                    if (update.requiredCredentials && 
-                                        Array.isArray(update.requiredCredentials) && 
-                                        update.requiredCredentials.length > 0 && 
-                                        step === 'building' && 
-                                        !showCredentialStep && 
-                                        Object.keys(credentialValues).length === 0) {
-                                        
-                                        const missingCreds = update.requiredCredentials.filter((cred: string) => {
-                                            // Check if credential is provided in config
-                                            const credLower = cred.toLowerCase();
-                                            const normalizedCred = cred.replace(/_/g, '').toLowerCase();
-                                            
-                                            // Check in config (normalized credentials)
-                                            const inConfig = Object.keys(config).some(key => {
-                                                const keyLower = key.toLowerCase();
-                                                return keyLower === credLower || 
-                                                       keyLower === normalizedCred ||
-                                                       keyLower.includes(normalizedCred.replace(/api|key|token/gi, ''));
-                                            });
-                                            
-                                            return !inConfig;
-                                        });
-                                        
-                                        // Only show credentials step if we have missing creds AND haven't shown it before
-                                        if (missingCreds.length > 0) {
-                                            // Deduplicate and normalize credentials before setting
-                                            const normalizedCreds = missingCreds.map((cred: string) => normalizeCredentialName(cred));
-                                            const uniqueMissingCreds = [...new Set(normalizedCreds)];
-                                            
-                                            // Update state manager BEFORE setting React state
-                                            stateManager.setRequiredCredentials(uniqueMissingCreds);
-                                            
-                                            setRequiredCredentials(uniqueMissingCreds);
-                                            setShowCredentialStep(true);
-                                            setStep('credentials'); // New step for credential collection
-                                            stopFallbackProgress();
-                                            setBuildingLogs(prev => [...prev, `⚠️ ${uniqueMissingCreds.length} credential(s) required`]);
-                                            return; // Don't complete yet, wait for credentials
-                                        }
-                                    }
-                                }
-                            }
-                            // If credentials were already provided or step is not 'building', continue with workflow generation
-                            
-                            // CRITICAL: Check if credentials are still required before completing
-                            // This handles the case where credentials are detected in the final completion update
-                            if (isCompleted && update.requiredCredentials !== undefined && Array.isArray(update.requiredCredentials) && update.requiredCredentials.length > 0) {
-                                const missingCreds = update.requiredCredentials.filter((cred: string) => {
-                                    const credLower = cred.toLowerCase();
-                                    const provided = Object.keys(config).some(key => 
-                                        key.toLowerCase().includes(credLower.replace(/_/g, '').replace(/api|key|token/gi, ''))
-                                    );
-                                    return !provided;
-                                });
-                                
-                                if (missingCreds.length > 0) {
-                                    // Normalize credentials
-                                    const normalizedCreds = missingCreds.map((cred: string) => normalizeCredentialName(cred));
-                                    const uniqueCreds = [...new Set(normalizedCreds)];
-                                    
-                                    // Store the built workflow data before returning (so we can save it after credentials are provided)
-                                    const workflowNodes = nodes || [];
-                                    const workflowEdges = edges || [];
-                                    if (workflowNodes.length > 0 || workflowEdges.length > 0) {
-                                        setPendingWorkflowData({ nodes: workflowNodes, edges: workflowEdges, update });
-                                    }
-                                    
-                                    // Update state manager BEFORE setting React state
-                                    stateManager.setRequiredCredentials(uniqueCreds);
-                                    
-                                    setRequiredCredentials(uniqueCreds);
-                                    setShowCredentialStep(true);
-                                    setStep('credentials');
-                                    stopFallbackProgress();
-                                    setBuildingLogs(prev => [...prev, `⚠️ ${uniqueCreds.length} credential(s) required`]);
-                                    return; // Don't complete yet, wait for credentials
-                                }
-                            }
+                            // ✅ PRODUCTION: Only check credentials AFTER generation completes (phase === "ready")
+                            // Do NOT check credentials during building phase - wait for completion
                             
                             if (isCompleted) {
                                 // Stop fallback progress
@@ -1502,24 +1852,67 @@ export function AutonomousAgentWizard() {
                                 setIsComplete(true);
                                 setBuildingLogs(prev => [...prev, 'Workflow Generated Successfully!']);
 
-                                // Execution Flow Architecture (STEP-2): Set workflow blueprint
-                                stateManager.setWorkflowBlueprint({ nodes, edges });
+                                // ✅ PRODUCTION FLOW: Unified configuration modal when phase === "ready"
+                                // Show both discoveredInputs and discoveredCredentials in single modal
+                                // ✅ CRITICAL: discoveredCredentials only contains MISSING credentials
+                                // OAuth credentials already connected (via header bar) are NOT included
+                                const phase = update.phase || update.status;
+                                const discoveredInputs = update.discoveredInputs || [];
+                                const discoveredCreds = update.discoveredCredentials || []; // Already filtered to only missing
+                                const requiredCreds = discoveredCreds; // All discovered credentials are missing (already filtered by backend)
                                 
-                                // Execution Flow Architecture (STEP-2): Set workflow blueprint
-                                stateManager.setWorkflowBlueprint({ nodes, edges });
+                                // ✅ PRODUCTION: Only show unified modal when phase === "ready" and workflow graph exists
+                                // Show modal if there are inputs OR missing credentials (not already connected)
+                                if (phase === 'ready' && (discoveredInputs.length > 0 || requiredCreds.length > 0) && (nodes?.length > 0 || edges?.length > 0)) {
+                                    // Store workflow data for later saving after inputs/credentials are attached
+                                    const workflowNodes = nodes || [];
+                                    const workflowEdges = edges || [];
+                                    if (workflowNodes.length > 0 || workflowEdges.length > 0) {
+                                        setPendingWorkflowData({ 
+                                            nodes: workflowNodes, 
+                                            edges: workflowEdges, 
+                                            update,
+                                            discoveredInputs,
+                                            discoveredCredentials: discoveredCreds
+                                        });
+                                    }
+                                    
+                                    // Show unified configuration modal ONLY after generation completes
+                                    setRequiredCredentials(requiredCreds.map((c: any) => c.vaultKey || c.credentialId));
+                                    setShowCredentialStep(true);
+                                    setStep('configuration'); // Use 'configuration' step for unified modal
+                                    setBuildingLogs(prev => [...prev, 
+                                        discoveredInputs.length > 0 ? `📋 ${discoveredInputs.length} input(s) required` : '',
+                                        requiredCreds.length > 0 ? `🔑 ${requiredCreds.length} credential(s) required` : ''
+                                    ].filter(Boolean));
+                                    return; // Don't save yet, wait for inputs and credentials
+                                }
                                 
-                                // Normalize and save immediately
+                                // ✅ PRODUCTION: If phase !== "ready", do NOT show configuration
+                                if (phase !== 'ready' && phase !== 'completed') {
+                                    console.log(`[Frontend] Phase is "${phase}", not "ready" - skipping configuration UI`);
+                                }
+
+                                // No credentials needed - save workflow immediately
                                 try {
                                     const { data: { user } } = await supabase.auth.getUser();
                                     const workflowNodes = nodes || [];
                                     const workflowEdges = edges || [];
                                     
-                                    // Inject user-provided credentials into nodes if any were provided
-                                    const nodesWithCredentials = Object.keys(credentialValues).length > 0
-                                        ? injectCredentialsIntoNodes(workflowNodes, credentialValues)
-                                        : workflowNodes;
+                                    // No credentials to inject (none required)
+                                    const nodesWithCredentials = workflowNodes;
                                     
                                     const normalized = validateAndFixWorkflow({ nodes: nodesWithCredentials, edges: workflowEdges });
+                                    
+                                    // Fix state transitions: Ensure we're in the correct state before setting blueprint
+                                    ensureStateForBlueprint(
+                                        stateManager, 
+                                        refinement?.refinedPrompt || refinement?.systemPrompt || prompt,
+                                        requiredCredentials
+                                    );
+                                    
+                                    // Execution Flow Architecture (STEP-2): Set workflow blueprint
+                                    stateManager.setWorkflowBlueprint({ nodes: normalized.nodes, edges: normalized.edges });
                                     
                                     // Execution Flow Architecture (STEP-2): Check for validation errors
                                     // If validation fixes were applied, we might have had errors
@@ -1564,10 +1957,21 @@ export function AutonomousAgentWizard() {
                                         }
                                         
                                         setGeneratedWorkflowId(savedWorkflow.id);
-                                        setNodes(normalized.nodes);
-                                        setEdges(normalized.edges);
+                                        setNodes(normalized.nodes as any[]);
+                                        setEdges(normalized.edges as any[]);
                                         workflowSaved = true;
                                         console.log('Workflow saved successfully with ID:', savedWorkflow.id);
+                                        
+                                        // Redirect directly to the workflow page, skipping the executing page
+                                        toast({
+                                            title: 'Workflow Created',
+                                            description: 'Your workflow has been created successfully!',
+                                        });
+                                        navigate(`/workflows`);
+                                        // Then redirect to the specific workflow after a brief moment
+                                        setTimeout(() => {
+                                            navigate(`/workflow/${savedWorkflow.id}`, { replace: true });
+                                        }, 500);
                                     } else {
                                         console.error('Workflow saved but no ID returned');
                                         throw new Error('Failed to get workflow ID after save');
@@ -1583,8 +1987,11 @@ export function AutonomousAgentWizard() {
                                     // But still show completion
                                 }
 
-                                // Immediately show completion
-                                setStep('complete');
+                                // Redirect to workflow instead of showing completion/executing
+                                // If workflow wasn't saved, show completion
+                                if (!workflowSaved) {
+                                    setStep('complete');
+                                }
                                 return;
                             }
 
@@ -1662,16 +2069,16 @@ export function AutonomousAgentWizard() {
                         throw saveError;
                     }
 
-                    if (savedWorkflow?.id) {
-                        setGeneratedWorkflowId(savedWorkflow.id);
-                        setNodes(normalized.nodes);
-                        setEdges(normalized.edges);
-                        workflowSaved = true;
-                        console.log('Workflow saved successfully in fallback with ID:', savedWorkflow.id);
-                    } else {
-                        console.error('Workflow saved but no ID returned');
-                        throw new Error('Failed to get workflow ID after save');
-                    }
+                                    if (savedWorkflow?.id) {
+                                        setGeneratedWorkflowId(savedWorkflow.id);
+                                        setNodes(normalized.nodes as any[]);
+                                        setEdges(normalized.edges as any[]);
+                                        workflowSaved = true;
+                                        console.log('Workflow saved successfully in fallback with ID:', savedWorkflow.id);
+                                    } else {
+                                        console.error('Workflow saved but no ID returned');
+                                        throw new Error('Failed to get workflow ID after save');
+                                    }
                 } catch (saveErr: any) {
                     console.error('Error in workflow save:', saveErr);
                     toast({
@@ -1962,9 +2369,12 @@ export function AutonomousAgentWizard() {
                                             </CardHeader>
                                             <CardContent>
                                                 <RadioGroup
-                                                    value={answers[q.id]}
-                                                    onValueChange={(val) => setAnswers(prev => ({ ...prev, [q.id]: val }))}
+                                                    value={answers[q.id] || ''}
+                                                    onValueChange={(val) => {
+                                                        setAnswers(prev => ({ ...prev, [q.id]: val }));
+                                                    }}
                                                     className="grid grid-cols-1 md:grid-cols-2 gap-3"
+                                                    name={`question-${q.id}`}
                                                 >
                                                     {q.options.map((opt, index) => {
                                                         const optionLabel = String.fromCharCode(65 + index); // A, B, C, D...
@@ -1976,6 +2386,7 @@ export function AutonomousAgentWizard() {
                                                                 key={optionId}
                                                                 onClick={(e) => {
                                                                     e.preventDefault();
+                                                                    e.stopPropagation();
                                                                     setAnswers(prev => ({ ...prev, [q.id]: opt }));
                                                                 }}
                                                                 className={`group flex items-start space-x-3 border-2 p-4 rounded-lg transition-all cursor-pointer ${
@@ -1987,12 +2398,18 @@ export function AutonomousAgentWizard() {
                                                                 <RadioGroupItem 
                                                                     value={opt} 
                                                                     id={optionId} 
-                                                                    className="text-indigo-500 mt-0.5" 
+                                                                    className="text-indigo-500 mt-0.5"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                    }}
                                                                 />
                                                                 <div className="flex-1 min-w-0">
                                                                     <Label 
                                                                         htmlFor={optionId} 
                                                                         className="cursor-pointer flex items-start gap-2 w-full"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                        }}
                                                                     >
                                                                         <span className="font-semibold text-indigo-500 shrink-0">{optionLabel}.</span>
                                                                         <span className="flex-1">{opt}</span>
@@ -2015,8 +2432,104 @@ export function AutonomousAgentWizard() {
                     </div>
                     )}
 
-                    {/* Loading state for refining */}
-                    {step === 'refining' && (
+                    {/* Configuration Questions in Refining Step */}
+                    {step === 'refining' && refinement?.questions && refinement.questions.length > 0 && (
+                        <div className="scroll-mt-6">
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                            >
+                                <Card className="border-blue-500/30 shadow-lg">
+                                    <CardHeader>
+                                        <CardTitle className="text-blue-400 flex items-center gap-2">
+                                            <Settings2 className="h-5 w-5" /> Configuration Required
+                                        </CardTitle>
+                                        <CardDescription>
+                                            Please provide the following configuration values to complete the workflow setup.
+                                        </CardDescription>
+                                    </CardHeader>
+                                    <CardContent className="space-y-4">
+                                        {refinement.questions.map((q: any, index: number) => {
+                                            const questionId = q.id || `config-${index}`;
+                                            const fieldName = q.fieldName || q.name || `field_${index}`;
+                                            const questionText = q.text || q.label || q.question || `Configuration ${index + 1}`;
+                                            const currentValue = requirementValues[fieldName] || requirementValues[q.fieldName] || '';
+                                            
+                                            return (
+                                                <div key={questionId} className="space-y-2">
+                                                    <Label htmlFor={questionId} className="text-sm font-medium">
+                                                        {questionText}
+                                                        {q.required !== false && <span className="text-red-400 ml-1">*</span>}
+                                                    </Label>
+                                                    {q.type === 'textarea' || (questionText.length > 100) ? (
+                                                        <textarea
+                                                            id={questionId}
+                                                            className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                                            placeholder={q.placeholder || `Enter ${questionText}`}
+                                                            value={currentValue}
+                                                            onChange={(e) => setRequirementValues({
+                                                                ...requirementValues,
+                                                                [fieldName]: e.target.value,
+                                                                [q.fieldName]: e.target.value,
+                                                            })}
+                                                        />
+                                                    ) : (
+                                                        <Input
+                                                            id={questionId}
+                                                            type={q.type === 'password' ? 'password' : 'text'}
+                                                            placeholder={q.placeholder || `Enter ${questionText}`}
+                                                            className="w-full"
+                                                            value={currentValue}
+                                                            onChange={(e) => setRequirementValues({
+                                                                ...requirementValues,
+                                                                [fieldName]: e.target.value,
+                                                                [q.fieldName]: e.target.value,
+                                                            })}
+                                                        />
+                                                    )}
+                                                    {q.helpText && (
+                                                        <p className="text-xs text-muted-foreground">{q.helpText}</p>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                        
+                                        <div className="flex gap-3 pt-4">
+                                            <Button
+                                                onClick={async () => {
+                                                    // Validate all required questions are answered
+                                                    const allFilled = refinement.questions.every((q: any) => {
+                                                        if (q.required === false) return true;
+                                                        const fieldName = q.fieldName || q.name;
+                                                        return requirementValues[fieldName] || requirementValues[q.fieldName];
+                                                    });
+                                                    
+                                                    if (!allFilled) {
+                                                        toast({
+                                                            title: 'Missing Configuration',
+                                                            description: 'Please fill in all required configuration fields.',
+                                                            variant: 'destructive',
+                                                        });
+                                                        return;
+                                                    }
+                                                    
+                                                    // Continue building with configuration values
+                                                    await handleBuild();
+                                                }}
+                                                className="flex-1"
+                                            >
+                                                <Check className="h-4 w-4 mr-2" />
+                                                Continue Building
+                                            </Button>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            </motion.div>
+                        </div>
+                    )}
+
+                    {/* Loading state for refining (only if no questions) */}
+                    {step === 'refining' && (!refinement?.questions || refinement.questions.length === 0) && (
                         <GlassBlurLoader 
                             text="Refining Workflow Plan..."
                             description="Processing your answers and generating the final workflow structure."
@@ -2045,8 +2558,7 @@ export function AutonomousAgentWizard() {
                                                     <span className="font-semibold text-green-400">• Trigger:</span>
                                                     <p className="text-foreground mt-1 ml-4">
                                                         {(() => {
-                                                            const trigger = analysis?.detectedWorkflowType || 
-                                                                          refinement.systemPrompt?.toLowerCase().match(/(?:trigger|when|on|schedule|form|webhook|manual)[^.]*/i)?.[0] ||
+                                                            const trigger = refinement.systemPrompt?.toLowerCase().match(/(?:trigger|when|on|schedule|form|webhook|manual)[^.]*/i)?.[0] ||
                                                                           'User-initiated workflow';
                                                             return trigger.charAt(0).toUpperCase() + trigger.slice(1);
                                                         })()}
@@ -2094,15 +2606,15 @@ export function AutonomousAgentWizard() {
                                             </div>
                                         </div>
 
-                                        {/* System Prompt Preview - Show enhanced prompt if available */}
+                                        {/* System Prompt Preview - Show analyzed prompt (3-5 sentences) */}
                                         <div className="bg-gradient-to-br from-muted/80 to-muted/40 p-5 rounded-lg border border-border/50 shadow-sm">
                                             <p className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
                                                 <Sparkles className="h-4 w-4" />
-                                                Final Enhanced Prompt:
+                                                Final Analyzed Prompt:
                                             </p>
                                             <div className="prose prose-sm dark:prose-invert max-w-none">
                                                 <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap font-medium">
-                                                    {refinement.enhancedPrompt || refinement.systemPrompt || 'No prompt available'}
+                                                    {refinement.enhancedPrompt || refinement.systemPrompt || refinement.refinedPrompt || 'No prompt available'}
                                                 </p>
                                             </div>
                                         </div>
@@ -2267,8 +2779,12 @@ export function AutonomousAgentWizard() {
                         </div>
                     )}
 
-                    {/* STEP 4.5: Credential Collection (if required during building) */}
-                    {step === 'credentials' && requiredCredentials.length > 0 && (
+                    {/* ✅ PRODUCTION: Unified Configuration Modal (ONLY after phase === "ready") */}
+                    {/* Shows both discoveredInputs and discoveredCredentials in single modal */}
+                    {step === 'configuration' && 
+                     pendingWorkflowData && 
+                     pendingWorkflowData.nodes?.length > 0 &&
+                     (pendingWorkflowData.update?.phase === 'ready' || pendingWorkflowData.update?.status === 'ready') && (
                         <div className="scroll-mt-6">
                             <motion.div
                                 initial={{ opacity: 0, y: 20 }}
@@ -2277,102 +2793,313 @@ export function AutonomousAgentWizard() {
                                 <Card className="border-amber-500/30 shadow-lg">
                                     <CardHeader>
                                         <CardTitle className="text-amber-400 flex items-center gap-2">
-                                            <AlertCircle className="h-5 w-5" /> Required Credentials
+                                            <AlertCircle className="h-5 w-5" /> Configuration Required
                                         </CardTitle>
                                         <CardDescription>
-                                            The workflow requires these credentials to be configured. Please provide them to continue.
+                                            Please provide the following configuration values to complete the workflow setup.
                                         </CardDescription>
                                     </CardHeader>
-                                    <CardContent className="space-y-4">
-                                        {[...new Set(requiredCredentials)].map((cred, i) => {
-                                            const credKey = cred.toLowerCase().replace(/_/g, '_');
-                                            const credLabel = cred.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                                            const isPassword = cred.toLowerCase().includes('key') || 
-                                                             cred.toLowerCase().includes('token') || 
-                                                             cred.toLowerCase().includes('password') ||
-                                                             cred.toLowerCase().includes('secret');
-                                            
-                                            // Determine field type for guide
-                                            let fieldType = 'credential';
-                                            if (cred.toLowerCase().includes('slack') && 
-                                                (cred.toLowerCase().includes('bot_token') || cred.toLowerCase().includes('bot token'))) {
-                                                fieldType = 'token'; // Set to 'token' to trigger proper guide generation
-                                            } else if (cred.toLowerCase().includes('webhook') && cred.toLowerCase().includes('url')) {
-                                                fieldType = 'webhook_url';
-                                            } else if (cred.toLowerCase().includes('url')) {
-                                                fieldType = 'url';
-                                            } else if (cred.toLowerCase().includes('oauth') || cred.toLowerCase().includes('client')) {
-                                                fieldType = 'oauth';
-                                            } else if (cred.toLowerCase().includes('smtp')) {
-                                                fieldType = 'smtp';
-                                            } else if (cred.toLowerCase().includes('token')) {
-                                                fieldType = 'token';
-                                            }
-                                            
-                                            return (
-                                                <div key={i} className="space-y-2">
-                                                    <Label htmlFor={`required-cred-${i}`} className="text-sm font-medium">
-                                                        {credLabel}
-                                                        <span className="text-red-400 ml-1">*</span>
-                                                    </Label>
-                                                    <Input
-                                                        id={`required-cred-${i}`}
-                                                        type={isPassword ? 'password' : 'text'}
-                                                        placeholder={`Enter ${credLabel}`}
-                                                        className="w-full"
-                                                        value={credentialValues[credKey] || credentialValues[cred] || ''}
-                                                        onChange={(e) => setCredentialValues({
-                                                            ...credentialValues,
-                                                            [credKey]: e.target.value,
-                                                            [cred]: e.target.value, // Also set with original key
-                                                        })}
-                                                    />
-                                                    <div className="flex justify-end">
-                                                        <InputGuideLink
-                                                            fieldKey={credKey}
-                                                            fieldLabel={credLabel}
-                                                            fieldType={fieldType}
-                                                            placeholder={credLabel}
-                                                        />
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
+                                    <CardContent className="space-y-6">
+                                        {/* Node Inputs Section */}
+                                        {pendingWorkflowData.discoveredInputs && pendingWorkflowData.discoveredInputs.length > 0 && (
+                                            <div className="space-y-4">
+                                                <h3 className="text-sm font-semibold text-foreground">Node Configuration</h3>
+                                                {pendingWorkflowData.discoveredInputs.map((input: any, i: number) => {
+                                                    const inputKey = `${input.nodeId}_${input.fieldName}`;
+                                                    const inputLabel = input.label || `${input.nodeLabel} - ${input.fieldName}`;
+                                                    
+                                                    return (
+                                                        <div key={i} className="space-y-2">
+                                                            <Label htmlFor={`input-${i}`} className="text-sm font-medium">
+                                                                {inputLabel}
+                                                                {input.required && <span className="text-red-400 ml-1">*</span>}
+                                                            </Label>
+                                                            {input.type === 'textarea' || input.fieldType === 'textarea' ? (
+                                                                <Textarea
+                                                                    id={`input-${i}`}
+                                                                    placeholder={input.description || `Enter ${input.fieldName}`}
+                                                                    className="w-full"
+                                                                    value={inputValues[inputKey] || input.defaultValue || ''}
+                                                                    onChange={(e) => setInputValues({
+                                                                        ...inputValues,
+                                                                        [inputKey]: e.target.value,
+                                                                    })}
+                                                                />
+                                                            ) : (
+                                                                <Input
+                                                                    id={`input-${i}`}
+                                                                    type="text"
+                                                                    placeholder={input.description || `Enter ${input.fieldName}`}
+                                                                    className="w-full"
+                                                                    value={inputValues[inputKey] || input.defaultValue || ''}
+                                                                    onChange={(e) => setInputValues({
+                                                                        ...inputValues,
+                                                                        [inputKey]: e.target.value,
+                                                                    })}
+                                                                />
+                                                            )}
+                                                            {input.description && (
+                                                                <p className="text-xs text-muted-foreground">{input.description}</p>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                        
+                                        {/* Credentials Section */}
+                                        {pendingWorkflowData.discoveredCredentials && pendingWorkflowData.discoveredCredentials.length > 0 && (
+                                            <div className="space-y-4 pt-4 border-t">
+                                                <h3 className="text-sm font-semibold text-foreground">Required Credentials</h3>
+                                                {pendingWorkflowData.discoveredCredentials
+                                                    // ✅ CRITICAL: Backend already filters to only missing credentials
+                                                    // OAuth already connected (via header bar) won't appear here
+                                                    // ✅ STRICT: NEVER show Google OAuth in configuration modal
+                                                    // Also filter out any satisfied credentials (double-check)
+                                                    .filter((cred: any) => {
+                                                        // ✅ STRICT FILTER: Exclude Google OAuth from configuration modal
+                                                        const isGoogleOAuth = (cred.provider?.toLowerCase() === 'google' && cred.type === 'oauth') ||
+                                                                              (cred.vaultKey?.toLowerCase() === 'google' && cred.type === 'oauth');
+                                                        if (isGoogleOAuth) {
+                                                            console.log('[Frontend] ✅ Filtering out Google OAuth from configuration modal');
+                                                            return false; // Never show Google OAuth
+                                                        }
+                                                        return !cred.satisfied && !cred.resolved; // Include other credentials
+                                                    })
+                                                    .map((cred: any, i: number) => {
+                                                        const credKey = cred.vaultKey || cred.credentialId || '';
+                                                        const normalizedKey = credKey.toLowerCase().replace(/_/g, '_');
+                                                        const credLabel = cred.displayName || credKey.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
+                                                        const credType = cred.type || '';
+                                                        const provider = cred.provider || '';
+                                                        
+                                                        // ✅ CRITICAL: OAuth credentials must NEVER be shown as form fields
+                                                        // They are handled via "Connect <Provider>" buttons only
+                                                        const isOAuth = credType === 'oauth';
+                                                        
+                                                        if (isOAuth) {
+                                                            // Render OAuth connect button instead of input field
+                                                            return (
+                                                                <div key={i} className="space-y-2">
+                                                                    <Label className="text-sm font-medium">
+                                                                        {credLabel}
+                                                                        <span className="text-red-400 ml-1">*</span>
+                                                                    </Label>
+                                                                    <Button
+                                                                        type="button"
+                                                                        variant="outline"
+                                                                        className="w-full"
+                                                                        onClick={async () => {
+                                                                            try {
+                                                                                // Get current user
+                                                                                const { data: { user }, error: userError } = await supabase.auth.getUser();
+                                                                                
+                                                                                if (userError || !user) {
+                                                                                    toast({
+                                                                                        title: 'Authentication Required',
+                                                                                        description: 'Please sign in first to connect your account',
+                                                                                        variant: 'destructive',
+                                                                                    });
+                                                                                    return;
+                                                                                }
+
+                                                                                // Store current workflow state in sessionStorage to return after OAuth
+                                                                                if (pendingWorkflowData) {
+                                                                                    sessionStorage.setItem('pendingWorkflowAfterOAuth', JSON.stringify({
+                                                                                        workflowId: generatedWorkflowId,
+                                                                                        step: step,
+                                                                                        pendingWorkflowData: pendingWorkflowData,
+                                                                                    }));
+                                                                                }
+
+                                                                                // Build redirect URL - return to workflow wizard after OAuth
+                                                                                const currentPath = window.location.pathname;
+                                                                                
+                                                                                // Handle different OAuth providers
+                                                                                if (provider === 'google') {
+                                                                                    const redirectUrl = `${window.location.origin}/auth/google/callback?returnTo=${encodeURIComponent(currentPath)}`;
+
+                                                                                    // Initiate Google OAuth flow
+                                                                                    const { data, error } = await supabase.auth.signInWithOAuth({
+                                                                                        provider: 'google',
+                                                                                        options: {
+                                                                                            redirectTo: redirectUrl,
+                                                                                            queryParams: {
+                                                                                                access_type: 'offline',
+                                                                                                prompt: 'consent',
+                                                                                                scope: 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/bigquery https://www.googleapis.com/auth/tasks https://www.googleapis.com/auth/contacts email profile',
+                                                                                            },
+                                                                                        },
+                                                                                    });
+
+                                                                                    if (error) {
+                                                                                        throw error;
+                                                                                    }
+                                                                                } else if (provider === 'slack') {
+                                                                                    // Slack OAuth - redirect to Slack OAuth URL
+                                                                                    // Note: Slack OAuth typically requires a different flow
+                                                                                    // For now, show a message that Slack OAuth should be configured via settings
+                                                                                    toast({
+                                                                                        title: 'Slack Connection',
+                                                                                        description: 'Please connect Slack via the Connections panel in settings, or provide a Slack Webhook URL.',
+                                                                                    });
+                                                                                    return;
+                                                                                } else {
+                                                                                    // Other OAuth providers
+                                                                                    toast({
+                                                                                        title: 'OAuth Provider',
+                                                                                        description: `OAuth connection for ${provider} is not yet implemented. Please connect via settings.`,
+                                                                                    });
+                                                                                    return;
+                                                                                }
+
+                                                                                if (error) {
+                                                                                    throw error;
+                                                                                }
+
+                                                                                toast({
+                                                                                    title: 'Redirecting to Google...',
+                                                                                    description: 'Please authorize access to Google services. You will be returned here after authorization.',
+                                                                                });
+                                                                            } catch (error) {
+                                                                                console.error('Google OAuth error:', error);
+                                                                                toast({
+                                                                                    title: 'Authentication Failed',
+                                                                                    description: error instanceof Error ? error.message : 'Failed to initiate Google authentication',
+                                                                                    variant: 'destructive',
+                                                                                });
+                                                                            }
+                                                                        }}
+                                                                    >
+                                                                        Connect {provider.charAt(0).toUpperCase() + provider.slice(1)}
+                                                                    </Button>
+                                                                    <p className="text-xs text-muted-foreground">
+                                                                        Click to connect your {provider} account via OAuth
+                                                                    </p>
+                                                                </div>
+                                                            );
+                                                        }
+                                                        
+                                                        // Non-OAuth credentials (webhook URLs, API keys, SMTP, etc.) - show as input fields
+                                                        const isPassword = credType === 'api_key' || credType === 'token' || 
+                                                                         normalizedKey.includes('key') || 
+                                                                         normalizedKey.includes('token') || 
+                                                                         normalizedKey.includes('password') ||
+                                                                         normalizedKey.includes('secret');
+                                                        
+                                                        // Determine field type for guide
+                                                        let fieldType = 'credential';
+                                                        if (normalizedKey.includes('slack') && 
+                                                            (normalizedKey.includes('bot_token') || normalizedKey.includes('bot token'))) {
+                                                            fieldType = 'token';
+                                                        } else if (normalizedKey.includes('webhook') && normalizedKey.includes('url')) {
+                                                            fieldType = 'webhook_url';
+                                                        } else if (normalizedKey.includes('url')) {
+                                                            fieldType = 'url';
+                                                        } else if (normalizedKey.includes('smtp')) {
+                                                            fieldType = 'smtp';
+                                                        } else if (normalizedKey.includes('token')) {
+                                                            fieldType = 'token';
+                                                        }
+                                                        
+                                                        return (
+                                                            <div key={i} className="space-y-2">
+                                                                <Label htmlFor={`required-cred-${i}`} className="text-sm font-medium">
+                                                                    {credLabel}
+                                                                    <span className="text-red-400 ml-1">*</span>
+                                                                </Label>
+                                                                <Input
+                                                                    id={`required-cred-${i}`}
+                                                                    type={isPassword ? 'password' : 'text'}
+                                                                    placeholder={`Enter ${credLabel}`}
+                                                                    className="w-full"
+                                                                    value={credentialValues[normalizedKey] || credentialValues[credKey] || credentialValues[cred.credentialId] || ''}
+                                                                    onChange={(e) => setCredentialValues({
+                                                                        ...credentialValues,
+                                                                        [normalizedKey]: e.target.value,
+                                                                        [credKey]: e.target.value,
+                                                                        [cred.credentialId]: e.target.value,
+                                                                    })}
+                                                                />
+                                                                <div className="flex justify-end">
+                                                                    <InputGuideLink
+                                                                        fieldKey={normalizedKey}
+                                                                        fieldLabel={credLabel}
+                                                                        fieldType={fieldType}
+                                                                        placeholder={credLabel}
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                            </div>
+                                        )}
                                         
                                         <div className="flex gap-3 pt-4">
                                             <Button
                                                 onClick={async () => {
-                                                    // Validate all credentials are filled
-                                                    const allFilled = requiredCredentials.every(cred => {
-                                                        const credKey = cred.toLowerCase().replace(/_/g, '_');
-                                                        return credentialValues[credKey] || credentialValues[cred];
+                                                    // Validate all required inputs are filled
+                                                    const requiredInputs = pendingWorkflowData.discoveredInputs?.filter((i: any) => i.required) || [];
+                                                    const inputsFilled = requiredInputs.every((input: any) => {
+                                                        const inputKey = `${input.nodeId}_${input.fieldName}`;
+                                                        return inputValues[inputKey] || input.defaultValue;
                                                     });
                                                     
-                                                    if (!allFilled) {
+                                                    // Validate all required credentials are filled
+                                                    // ✅ CRITICAL: discoveredCredentials only contains MISSING credentials
+                                                    // OAuth credentials already connected (via header bar) are NOT in this list
+                                                    const requiredCreds = pendingWorkflowData.discoveredCredentials || [];
+                                                    const credsFilled = requiredCreds.every((cred: any) => {
+                                                        // OAuth credentials are handled via "Connect" buttons
+                                                        // If they appear here, they need to be connected (but we can't validate button clicks here)
+                                                        // For now, OAuth credentials that appear need connection
+                                                        if (cred.type === 'oauth') {
+                                                            // OAuth must be connected via button - can't validate here
+                                                            // Assume user will connect if button is shown
+                                                            return true; // Allow OAuth to proceed (connection happens via button)
+                                                        }
+                                                        
+                                                        // Non-OAuth credentials must have values
+                                                        const credKey = cred.vaultKey || cred.credentialId;
+                                                        const normalizedKey = credKey?.toLowerCase().replace(/_/g, '_');
+                                                        return credentialValues[normalizedKey] || credentialValues[credKey] || credentialValues[cred.credentialId];
+                                                    });
+                                                    
+                                                    if (!inputsFilled) {
                                                         toast({
-                                                            title: 'Missing Credentials',
-                                                            description: 'Please fill in all required credentials.',
+                                                            title: 'Missing Configuration',
+                                                            description: 'Please fill in all required node configuration fields.',
                                                             variant: 'destructive',
                                                         });
                                                         return;
                                                     }
                                                     
-                                                    // Start building workflow with credentials
+                                                    if (!credsFilled) {
+                                                        const missingOAuth = requiredCreds.filter((c: any) => c.type === 'oauth' && !c.resolved);
+                                                        const missingNonOAuth = requiredCreds.filter((c: any) => c.type !== 'oauth' && !credentialValues[c.vaultKey || c.credentialId]);
+                                                        
+                                                        let errorMsg = 'Please complete all required credentials.';
+                                                        if (missingOAuth.length > 0) {
+                                                            errorMsg = `Please connect ${missingOAuth.map((c: any) => c.provider || 'OAuth').join(', ')} account(s) using the Connect buttons.`;
+                                                        } else if (missingNonOAuth.length > 0) {
+                                                            errorMsg = 'Please fill in all required credential fields.';
+                                                        }
+                                                        
+                                                        toast({
+                                                            title: 'Missing Credentials',
+                                                            description: errorMsg,
+                                                            variant: 'destructive',
+                                                        });
+                                                        return;
+                                                    }
+                                                    
+                                                    // Submit unified configuration
                                                     await handleBuild();
                                                 }}
                                                 className="flex-1"
                                             >
                                                 <Check className="h-4 w-4 mr-2" />
-                                                Start Building Workflow
-                                            </Button>
-                                            <Button
-                                                variant="outline"
-                                                onClick={async () => {
-                                                    // Skip credentials, use environment variables
-                                                    await handleBuild();
-                                                }}
-                                            >
-                                                Use Environment Variables
+                                                Continue Building
                                             </Button>
                                         </div>
                                     </CardContent>
@@ -2408,6 +3135,123 @@ export function AutonomousAgentWizard() {
 
                 {/* Separate page for building and complete steps */}
                 <AnimatePresence mode="wait">
+                    {/* STEP 6: EXECUTING */}
+                    {step === 'executing' && (
+                        <motion.div
+                            key="executing"
+                            initial={{ opacity: 0 }} 
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="fixed inset-0 z-[60] w-screen h-screen p-4 sm:p-6 md:p-8 overflow-hidden flex flex-col"
+                            style={{ 
+                                background: 'linear-gradient(180deg, #0B0F1A 0%, #111827 100%)',
+                                fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+                            }}
+                        >
+                            <div className="w-full max-w-4xl mx-auto space-y-6 sm:space-y-8 md:space-y-10 py-4 flex flex-col items-center justify-center flex-1 overflow-y-auto min-h-0">
+                                <div className="text-center space-y-4 sm:space-y-5 md:space-y-6">
+                                    <motion.div
+                                        initial={{ scale: 0.8, opacity: 0 }}
+                                        animate={{ scale: 1, opacity: 1 }}
+                                        transition={{ duration: 0.5 }}
+                                        className="relative inline-block mx-auto"
+                                    >
+                                        <motion.div
+                                            className="absolute inset-0 rounded-full -z-10"
+                                            style={{ 
+                                                background: 'radial-gradient(circle, rgba(34, 197, 94, 0.3) 0%, transparent 70%)',
+                                                filter: 'blur(40px)',
+                                                width: '140px',
+                                                height: '140px',
+                                                left: '50%',
+                                                top: '50%',
+                                                transform: 'translate(-50%, -50%)'
+                                            }}
+                                            animate={{ 
+                                                scale: [1, 1.3, 1],
+                                                opacity: [0.3, 0.6, 0.3]
+                                            }}
+                                            transition={{ 
+                                                repeat: Infinity, 
+                                                duration: 1.2,
+                                                ease: "easeInOut"
+                                            }}
+                                        />
+                                        <div className="relative flex items-center justify-center w-28 h-28 sm:w-32 sm:h-32 mx-auto">
+                                            <motion.div
+                                                className="absolute inset-0 rounded-full border-2"
+                                                style={{ 
+                                                    borderColor: 'rgba(34, 197, 94, 0.4)',
+                                                    borderTopColor: 'rgba(34, 197, 94, 1)',
+                                                }}
+                                                animate={{ rotate: 360 }}
+                                                transition={{ 
+                                                    repeat: Infinity, 
+                                                    duration: 2,
+                                                    ease: "linear"
+                                                }}
+                                            />
+                                            <Play className="h-12 w-12 sm:h-14 sm:w-14 text-green-500 relative z-10" />
+                                        </div>
+                                    </motion.div>
+                                    
+                                    <motion.h2 
+                                        className="text-2xl sm:text-3xl md:text-4xl font-bold text-foreground"
+                                        initial={{ opacity: 0, y: 20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ delay: 0.2 }}
+                                    >
+                                        Executing Workflow...
+                                    </motion.h2>
+                                    
+                                    <motion.p 
+                                        className="text-muted-foreground text-sm sm:text-base"
+                                        initial={{ opacity: 0, y: 20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ delay: 0.3 }}
+                                    >
+                                        Your workflow is running. This may take a few moments.
+                                    </motion.p>
+                                    
+                                    <div className="w-full max-w-md mx-auto mt-6">
+                                        <div className="h-2 bg-muted rounded-full overflow-hidden">
+                                            <motion.div
+                                                className="h-full bg-green-500 rounded-full"
+                                                initial={{ width: '10%' }}
+                                                animate={{ width: `${executionProgress}%` }}
+                                                transition={{ duration: 0.3 }}
+                                            />
+                                        </div>
+                                        <p className="text-xs text-muted-foreground mt-2 text-center">
+                                            {executionProgress.toFixed(0)}% Complete
+                                        </p>
+                                    </div>
+                                    
+                                    {executionId && (
+                                        <motion.p 
+                                            className="text-xs text-muted-foreground font-mono"
+                                            initial={{ opacity: 0 }}
+                                            animate={{ opacity: 1 }}
+                                            transition={{ delay: 0.5 }}
+                                        >
+                                            Execution ID: {executionId.substring(0, 8)}...
+                                        </motion.p>
+                                    )}
+                                    
+                                    {executionError && (
+                                        <motion.div
+                                            initial={{ opacity: 0, y: 20 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            className="mt-4 p-4 bg-destructive/10 border border-destructive/20 rounded-lg"
+                                        >
+                                            <p className="text-sm text-destructive">{executionError}</p>
+                                        </motion.div>
+                                    )}
+                                </div>
+                            </div>
+                        </motion.div>
+                    )}
+
                     {/* STEP 5+: BUILDING */}
                     {step === 'building' && (
                         <motion.div

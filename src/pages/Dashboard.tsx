@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
 import { useRole } from "@/hooks/useRole";
@@ -8,6 +8,9 @@ import { Zap, Plus, Play, FolderOpen, LayoutTemplate, History, Settings, MoreHor
 import ConnectionsPanel from "@/components/ConnectionsPanel";
 import GoogleConnectionStatus from "@/components/GoogleConnectionStatus";
 import { ProfileSettingsModal } from "@/components/ProfileSettingsModal";
+import { WorkflowAuthGate } from "@/components/WorkflowAuthGate";
+import { WorkflowActionButton } from "@/components/WorkflowActionButton";
+import { useWorkflowAuth } from "@/contexts/WorkflowAuthContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -32,6 +35,7 @@ export default function Dashboard() {
   const { user, loading } = useAuth();
   const { canAccessAdmin } = useRole();
   const { theme, toggleTheme } = useTheme();
+  const { authStatus } = useWorkflowAuth();
   const navigate = useNavigate();
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [workflowsLoading, setWorkflowsLoading] = useState(true);
@@ -457,17 +461,21 @@ export default function Dashboard() {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold">Welcome back!</h1>
-            <p className="text-muted-foreground mt-1">Here's what's happening with your workflows</p>
+        <WorkflowAuthGate>
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h1 className="text-3xl font-bold">Welcome back!</h1>
+              <p className="text-muted-foreground mt-1">Here's what's happening with your workflows</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <WorkflowActionButton
+                className="gradient-primary text-primary-foreground"
+                onClick={() => setShowCreateOptions(true)}
+              >
+                <Plus className="mr-2 h-4 w-4" /> New Workflow
+              </WorkflowActionButton>
+            </div>
           </div>
-          <div className="flex items-center gap-3">
-            <Button className="gradient-primary text-primary-foreground" onClick={() => setShowCreateOptions(true)}>
-              <Plus className="mr-2 h-4 w-4" /> New Workflow
-            </Button>
-          </div>
-        </div>
 
         {/* Stats */}
         <div className="grid gap-4 md:grid-cols-3 mb-8">
@@ -544,9 +552,12 @@ export default function Dashboard() {
                 <p className="text-muted-foreground text-center max-w-md mb-6">
                   No workflows created yet. Start by creating your first AI agent or automation workflow.
                 </p>
-                <Button className="gradient-primary text-primary-foreground" onClick={() => setShowCreateOptions(true)}>
+                <WorkflowActionButton
+                  className="gradient-primary text-primary-foreground"
+                  onClick={() => setShowCreateOptions(true)}
+                >
                   <Plus className="mr-2 h-4 w-4" /> Create Your First Workflow
-                </Button>
+                </WorkflowActionButton>
               </CardContent>
             </Card>
           ) : (
@@ -574,7 +585,10 @@ export default function Dashboard() {
                         <DropdownMenuItem onClick={(e) => { e.stopPropagation(); navigate(`/workflow/${workflow.id}`); }}>
                           Edit
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); duplicateWorkflow(workflow); }}>
+                        <DropdownMenuItem 
+                          onClick={(e) => { e.stopPropagation(); duplicateWorkflow(workflow); }}
+                          disabled={!authStatus?.googleConnected}
+                        >
                           <Copy className="mr-2 h-4 w-4" /> Duplicate
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
@@ -623,6 +637,7 @@ export default function Dashboard() {
             </div>
           )}
         </div>
+        </WorkflowAuthGate>
       </main>
 
       {/* Workflow Creation Options Overlay */}
@@ -670,7 +685,7 @@ export default function Dashboard() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <Button
+                  <WorkflowActionButton
                     className="w-full gradient-primary text-primary-foreground"
                     onClick={() => {
                       setShowCreateOptions(false);
@@ -678,7 +693,7 @@ export default function Dashboard() {
                     }}
                   >
                     Start Building
-                  </Button>
+                  </WorkflowActionButton>
                 </CardContent>
               </Card>
 
@@ -695,7 +710,7 @@ export default function Dashboard() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <Button
+                  <WorkflowActionButton
                     className="w-full gradient-primary text-primary-foreground"
                     onClick={() => {
                       setShowCreateOptions(false);
@@ -703,7 +718,7 @@ export default function Dashboard() {
                     }}
                   >
                     Generate with AI
-                  </Button>
+                  </WorkflowActionButton>
                 </CardContent>
               </Card>
             </div>
