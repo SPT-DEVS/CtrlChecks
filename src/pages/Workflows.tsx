@@ -6,6 +6,8 @@ import { Plus, Search, Zap, MoreHorizontal, Play, Trash2, Copy, Clock, History, 
 import ConnectionsPanel from '@/components/ConnectionsPanel';
 import GoogleConnectionStatus from '@/components/GoogleConnectionStatus';
 import { ProfileSettingsModal } from '@/components/ProfileSettingsModal';
+import { WorkflowAuthGate } from '@/components/WorkflowAuthGate';
+import { WorkflowActionButton } from '@/components/WorkflowActionButton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -314,26 +316,27 @@ export default function Workflows() {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold">Workflows</h1>
-            <p className="text-muted-foreground mt-1">Manage and run your automation workflows</p>
+        <WorkflowAuthGate>
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h1 className="text-3xl font-bold">Workflows</h1>
+              <p className="text-muted-foreground mt-1">Manage and run your automation workflows</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <Button
+                variant="outline"
+                onClick={() => navigate('/executions')}
+              >
+                <History className="mr-2 h-4 w-4" /> Executions
+              </Button>
+              <WorkflowActionButton
+                className="gradient-primary text-primary-foreground"
+                onClick={() => setShowCreateOptions(true)}
+              >
+                <Plus className="mr-2 h-4 w-4" /> New Workflow
+              </WorkflowActionButton>
+            </div>
           </div>
-          <div className="flex items-center gap-3">
-            <Button
-              variant="outline"
-              onClick={() => navigate('/executions')}
-            >
-              <History className="mr-2 h-4 w-4" /> Executions
-            </Button>
-            <Button
-              className="gradient-primary text-primary-foreground"
-              onClick={() => setShowCreateOptions(true)}
-            >
-              <Plus className="mr-2 h-4 w-4" /> New Workflow
-            </Button>
-          </div>
-        </div>
 
         {/* Search */}
         <div className="relative max-w-md mb-6">
@@ -444,6 +447,7 @@ export default function Workflows() {
             ))}
           </div>
         )}
+        </WorkflowAuthGate>
       </main>
 
       {/* Workflow Detail Dialog */}

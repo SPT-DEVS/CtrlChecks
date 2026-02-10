@@ -7,8 +7,11 @@ import { generateFieldGuide } from './guideGenerator';
 
 // Detect guide type from field key or label
 function detectGuideType(key: string, label: string, type?: string): 'api_key' | 'url' | 'credential' | 'token' | 'endpoint' | 'custom' {
-  const lowerKey = key.toLowerCase();
-  const lowerLabel = label.toLowerCase();
+  // ✅ PRODUCTION: Null-safe string operations
+  const normalizedKey = key?.toLowerCase?.() ?? "";
+  const normalizedLabel = label?.toLowerCase?.() ?? "";
+  const lowerKey = normalizedKey;
+  const lowerLabel = normalizedLabel;
   const combined = `${lowerKey} ${lowerLabel}`;
 
   // Check for specific services first (before generic types)
@@ -38,8 +41,11 @@ function detectGuideType(key: string, label: string, type?: string): 'api_key' |
 
 // Generate guide question text
 function getGuideQuestion(key: string, label: string): string {
-  const lowerKey = key.toLowerCase();
-  const lowerLabel = label.toLowerCase();
+  // ✅ PRODUCTION: Null-safe string operations
+  const normalizedKey = key?.toLowerCase?.() ?? "";
+  const normalizedLabel = label?.toLowerCase?.() ?? "";
+  const lowerKey = normalizedKey;
+  const lowerLabel = normalizedLabel;
   const combined = `${lowerKey} ${lowerLabel}`;
 
   if (combined.includes('api key') || combined.includes('apikey')) {
@@ -89,19 +95,22 @@ export function InputGuideLink({ fieldKey, fieldLabel, fieldType, nodeType, clas
   
   // Generate field guide if no node-specific guide or helpText guide exists
   // ALWAYS generate guide for Slack Bot Token to ensure correct guide is shown
-  const isSlackBotToken = (fieldLabel.toLowerCase().includes('slack') && 
-                           (fieldLabel.toLowerCase().includes('bot token') || 
-                            fieldLabel.toLowerCase().includes('bot_token'))) ||
-                          (fieldKey.toLowerCase().includes('slack') && 
-                           (fieldKey.toLowerCase().includes('bot_token') || 
-                            fieldKey.toLowerCase().includes('bottoken')));
+  // ✅ PRODUCTION: Null-safe string operations
+  const normalizedFieldLabel = fieldLabel?.toLowerCase?.() ?? "";
+  const normalizedFieldKey = fieldKey?.toLowerCase?.() ?? "";
+  const isSlackBotToken = (normalizedFieldLabel.includes('slack') && 
+                           (normalizedFieldLabel.includes('bot token') || 
+                            normalizedFieldLabel.includes('bot_token'))) ||
+                          (normalizedFieldKey.includes('slack') && 
+                           (normalizedFieldKey.includes('bot_token') || 
+                            normalizedFieldKey.includes('bottoken')));
   
   const generatedGuide = !nodeGuide && !helpTextGuide ? generateFieldGuide(
     nodeType || '',
-    fieldKey,
-    fieldLabel,
+    fieldKey || '',
+    fieldLabel || '',
     fieldType || 'text',
-    placeholder || fieldLabel // Use fieldLabel as fallback if placeholder not available
+    placeholder || fieldLabel || '' // Use fieldLabel as fallback if placeholder not available
   ) : null;
   
   // Fallback to generic guide type detection

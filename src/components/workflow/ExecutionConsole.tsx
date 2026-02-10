@@ -491,6 +491,51 @@ export default function ExecutionConsole({ isExpanded, onToggle }: ExecutionCons
                     return null;
                   })()}
 
+                  {/* Chat URL Display - Show when workflow has chat trigger node (like webhook - always available) */}
+                  {(() => {
+                    const chatNode = nodes.find((node: any) => node.data?.type === 'chat_trigger');
+                    if (chatNode && workflowId) {
+                      const chatUrl = `${window.location.origin}/chat/${workflowId}/${chatNode.id}`;
+                      return (
+                        <div className="p-3 rounded-md bg-primary/10 border border-primary/20 mb-4">
+                          <div className="text-xs font-medium text-primary mb-2">💬 Chat URL</div>
+                          <div className="flex gap-2 items-center">
+                            <code className="text-xs font-mono break-all flex-1 bg-background p-2 rounded bg-muted/50">
+                              {chatUrl}
+                            </code>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 px-2 text-xs"
+                              onClick={() => {
+                                navigator.clipboard.writeText(chatUrl);
+                                toast({
+                                  title: 'Chat URL copied to clipboard',
+                                });
+                              }}
+                            >
+                              <Copy className="h-3 w-3 mr-1" />
+                              Copy
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 px-2 text-xs"
+                              onClick={() => window.open(chatUrl, '_blank')}
+                            >
+                              <ExternalLink className="h-3 w-3 mr-1" />
+                              Open
+                            </Button>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-2">
+                            Share this URL to open the chat interface. Each message will trigger a new workflow execution (like webhook). Messages will appear in the execution console.
+                          </p>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
+
                   {selectedExecution.error && (
                     <div className="p-3 rounded-md bg-destructive/10 border border-destructive/20">
                       <div className="text-xs font-medium text-destructive mb-1">Error</div>

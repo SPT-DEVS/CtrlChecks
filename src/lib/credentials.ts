@@ -16,10 +16,11 @@ export interface GoogleCredentials {
 
 /**
  * Save credentials to Supabase user_credentials table
+ * Supports: 'linkedin', 'google', and any other service (e.g., 'slack', 'smtp', etc.)
  */
 export async function saveCredentials(
-  service: 'linkedin' | 'google',
-  credentials: LinkedInCredentials | GoogleCredentials
+  service: 'linkedin' | 'google' | string,
+  credentials: LinkedInCredentials | GoogleCredentials | Record<string, any>
 ): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser();
   
@@ -31,7 +32,7 @@ export async function saveCredentials(
     .from('user_credentials')
     .upsert({
       user_id: user.id,
-      service,
+      service: service.toLowerCase(),
       credentials: credentials as any,
       updated_at: new Date().toISOString(),
     }, {
@@ -95,6 +96,63 @@ export async function removeCredentials(service: 'linkedin' | 'google'): Promise
     console.error('Error removing credentials:', error);
     throw new Error(`Failed to remove ${service} credentials: ${error.message}`);
   }
+}
+
+/**
+ * Save workflow credentials (e.g., Slack webhook, SMTP, etc.)
+ * This is called when user provides credentials during workflow creation
+ */
+export async function saveWorkflowCredential(
+  credentialName: string,
+  credentialValue: string
+): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  if (!user) {
+    throw new Error('User not authenticated');
+  }
+
+  // Normalize credential name to service name
+  // e.g., 'SLACK_WEBHOOK_URL' -> 'slack'
+  const service = credentialName.toLowerCase()
+    .replace(/_webhook_url$/, '')
+    .replace(/_token$/, '')
+    .replace(/_api_key$/, '')
+    .replace(/_url$/, '')
+    .split('_')[0]; // Get first part (e.g., 'slack' from 'slack_webhook_url')
+
+  // Get existing credentials for this service
+  const { data: existing } = await supabase
+    .from('user_credentials')
+    .select('credentials')
+    .eq('user_id', user.id)
+    .eq('service', service)
+    .single();
+
+  // Merge with existing credentials
+  const existingCreds = existing?.credentials || {};
+  const updatedCreds = {
+    ...existingCreds,
+    [credentialName.toLowerCase()]: credentialValue,
+  };
+
+  const { error } = await supabase
+    .from('user_credentials')
+    .upsert({
+      user_id: user.id,
+      service: service,
+      credentials: updatedCreds,
+      updated_at: new Date().toISOString(),
+    }, {
+      onConflict: 'user_id,service'
+    });
+
+  if (error) {
+    console.error('Error saving workflow credential:', error);
+    throw new Error(`Failed to save ${credentialName}: ${error.message}`);
+  }
+
+  console.log(`✅ Saved credential ${credentialName} for service ${service}`);
 }
 
 /**

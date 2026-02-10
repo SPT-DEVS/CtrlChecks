@@ -66,5 +66,11 @@ export const ENDPOINTS = {
 
 // Log configuration on load for easier debugging (only in development)
 if (isDevelopment) {
+    console.log('🔍 Environment Debug:', {
+        DEV: import.meta.env.DEV,
+        MODE: import.meta.env.MODE,
+        VITE_API_URL: import.meta.env.VITE_API_URL,
+        isDevelopment
+    });
     console.log('App Configuration:', ENDPOINTS);
 }

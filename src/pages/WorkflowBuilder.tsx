@@ -162,21 +162,70 @@ export default function WorkflowBuilder() {
 
       console.log(`[EdgeDebug] Saving ${validEdges.length} valid edges (from ${edges.length} total)`);
 
+      // ✅ CRITICAL: Normalize graph before saving
+      // - Deduplicate edges
+      // - Normalize node configs (e.g., If/Else condition -> conditions)
+      // - Remove invalid edges
+      const { normalizeWorkflowGraph } = await import('@/lib/graphNormalizer');
+      const normalized = normalizeWorkflowGraph(nodes, validEdges);
+      
+      if (normalized.warnings.length > 0) {
+        console.warn('[WorkflowBuilder] Graph normalization warnings:', normalized.warnings);
+      }
+      if (normalized.errors.length > 0) {
+        console.error('[WorkflowBuilder] Graph normalization errors:', normalized.errors);
+        throw new Error(`Graph validation failed: ${normalized.errors.join(', ')}`);
+      }
+
+      // ✅ CRITICAL: Validate workflow topology before saving
+      const { validateWorkflowGraph } = await import('@/lib/workflowGraphValidator');
+      const validation = validateWorkflowGraph(normalized.nodes, normalized.edges);
+      
+      if (!validation.valid) {
+        const errorMessages = validation.errors.map(e => e.message).join('; ');
+        console.error('[WorkflowBuilder] Workflow validation failed:', validation.errors);
+        toast({
+          title: 'Validation Failed',
+          description: errorMessages,
+          variant: 'destructive',
+        });
+        throw new Error(`Workflow validation failed: ${errorMessages}`);
+      }
+      
+      if (validation.warnings.length > 0) {
+        console.warn('[WorkflowBuilder] Workflow validation warnings:', validation.warnings);
+      }
+
       const workflowData = {
         name: useWorkflowStore.getState().workflowName,
-        nodes: nodes as unknown as Json,
-        edges: validEdges as unknown as Json, // Ensure edges included
+        nodes: normalized.nodes as unknown as Json,
+        edges: normalized.edges as unknown as Json, // Normalized edges (deduplicated, validated)
         user_id: user.id,
         updated_at: new Date().toISOString(),
       };
 
       const workflowId = useWorkflowStore.getState().workflowId;
 
-      if (workflowId) {
+      let savedWorkflowId = workflowId;
+      
+      // ✅ CRITICAL: If workflow has nodes and edges, set status to 'active'
+      // Don't set phase here - let attach-inputs endpoint handle phase transitions
+      // This prevents phase conflicts when attach-inputs is called after save
+      const hasNodes = nodes.length > 0;
+      const hasEdges = validEdges.length > 0;
+      const isReady = hasNodes && (hasEdges || nodes.length === 1); // Single node workflows don't need edges
+      
+      if (isReady) {
+        // Set status to 'active' (valid enum value) - phase will be set by attach-inputs
+        (workflowData as any).status = 'active';
+        // Don't set phase - let attach-inputs handle it based on workflow state
+      }
+      
+      if (savedWorkflowId) {
         const { error } = await supabase
           .from('workflows')
           .update(workflowData)
-          .eq('id', workflowId);
+          .eq('id', savedWorkflowId);
 
         if (error) throw error;
       } else {
@@ -189,15 +238,112 @@ export default function WorkflowBuilder() {
         if (error) throw error;
 
         if (data) {
+          savedWorkflowId = data.id;
           setWorkflowId(data.id);
           navigate(`/workflow/${data.id}`, { replace: true });
+        }
+      }
+
+      // ✅ CRITICAL: After saving, automatically attach inputs and set status to ready_for_execution
+      if (savedWorkflowId) {
+        try {
+          const { data: sessionData } = await supabase.auth.getSession();
+          
+          // Extract inputs from current nodes
+          const inputsToAttach: Record<string, Record<string, any>> = {};
+          
+          nodes.forEach((node: any) => {
+            const nodeConfig = node.data?.config || {};
+            const nodeInputs: Record<string, any> = {};
+            
+            // Extract all non-empty config values as inputs
+            Object.keys(nodeConfig).forEach((key) => {
+              const value = nodeConfig[key];
+              // Skip empty values, credentials, and internal fields
+              if (value !== undefined && value !== null && value !== '' && 
+                  !key.startsWith('_') && 
+                  !key.includes('credential') && 
+                  !key.includes('oauth')) {
+                nodeInputs[key] = value;
+              }
+            });
+            
+            // Only add node if it has inputs
+            if (Object.keys(nodeInputs).length > 0) {
+              inputsToAttach[node.id] = nodeInputs;
+            }
+          });
+          
+          // Attach inputs if any exist
+          if (Object.keys(inputsToAttach).length > 0) {
+            console.log('[handleSave] Auto-attaching inputs after save:', inputsToAttach);
+            
+            const attachInputsResponse = await fetch(`${ENDPOINTS.itemBackend}/api/workflows/${savedWorkflowId}/attach-inputs`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(sessionData?.session?.access_token
+                  ? { Authorization: `Bearer ${sessionData.session.access_token}` }
+                  : {}),
+              },
+              body: JSON.stringify({
+                inputs: inputsToAttach,
+              }),
+            });
+            
+            if (attachInputsResponse.ok) {
+              console.log('[handleSave] ✅ Inputs attached successfully');
+              
+              // Check if credentials are required
+              const attachResult = await attachInputsResponse.json();
+              
+              // If no credentials required, status should already be ready_for_execution
+              // If credentials required, status will be configuring_credentials
+              // Either way, workflow is ready to run (credentials can be attached later)
+            } else {
+              const attachError = await attachInputsResponse.json().catch(() => ({ error: 'Failed to attach inputs' }));
+              
+              // If error is phase locking (already configured), that's fine
+              if (attachError.code === 'PHASE_LOCKED' || 
+                  attachError.code === 'INVALID_PHASE' ||
+                  (attachError.currentPhase && ['ready_for_execution', 'executing'].includes(attachError.currentPhase))) {
+                console.log('[handleSave] Workflow already configured, skipping input attachment');
+              } else {
+                console.warn('[handleSave] Failed to auto-attach inputs (non-fatal):', attachError);
+              }
+            }
+          } else {
+            // No inputs to attach, but we can still set status to ready_for_execution if no credentials needed
+            console.log('[handleSave] No inputs to attach, checking if workflow can be set to ready');
+            
+            // Try to set status directly to ready_for_execution
+            const { data: sessionData } = await supabase.auth.getSession();
+            const checkCredsResponse = await fetch(`${ENDPOINTS.itemBackend}/api/workflows/${savedWorkflowId}`, {
+              method: 'GET',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(sessionData?.session?.access_token
+                  ? { Authorization: `Bearer ${sessionData.session.access_token}` }
+                  : {}),
+              },
+            });
+            
+            if (checkCredsResponse.ok) {
+              const workflowData = await checkCredsResponse.json();
+              // If workflow has no credential requirements, we could set it to ready_for_execution
+              // But for now, let execute-workflow handle the status update
+            }
+          }
+        } catch (attachError) {
+          console.warn('[handleSave] Error auto-attaching inputs (non-fatal):', attachError);
+          // Continue - workflow is saved, inputs can be attached later
         }
       }
 
       setIsDirty(false);
       toast({
         title: 'Saved',
-        description: 'Workflow saved successfully',
+        description: 'Workflow saved and configured successfully',
       });
     } catch (error) {
       console.error('Error saving workflow:', error);
@@ -272,40 +418,50 @@ export default function WorkflowBuilder() {
       
       try {
         setIsSaving(true);
-        const workflowData = {
-          name: useWorkflowStore.getState().workflowName,
-          nodes: nodes as unknown as Json,
-          edges: edges as unknown as Json,
-          user_id: user.id,
-          updated_at: new Date().toISOString(),
-        };
+        
+        // ✅ CRITICAL: Use /api/save-workflow endpoint instead of direct Supabase update
+        // This ensures cache invalidation and graph hash logging happen
+        const { normalizeWorkflowGraph } = await import('@/lib/graphNormalizer');
+        const normalized = normalizeWorkflowGraph(nodes, edges);
+        
+        const { data: sessionData } = await supabase.auth.getSession();
+        const saveResponse = await fetch(`${ENDPOINTS.itemBackend}/api/save-workflow`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(sessionData?.session?.access_token
+              ? { Authorization: `Bearer ${sessionData.session.access_token}` }
+              : {}),
+          },
+          body: JSON.stringify({
+            workflowId: workflowId || undefined,
+            name: useWorkflowStore.getState().workflowName,
+            nodes: normalized.nodes,
+            edges: normalized.edges,
+            user_id: user.id,
+          }),
+        });
 
-        let savedWorkflowId = workflowId;
+        if (!saveResponse.ok) {
+          const errorData = await saveResponse.json().catch(() => ({ error: 'Save failed' }));
+          throw new Error(errorData.error || errorData.message || 'Failed to save workflow');
+        }
 
-        if (savedWorkflowId) {
-          const { error } = await supabase
-            .from('workflows')
-            .update(workflowData)
-            .eq('id', savedWorkflowId);
+        const saveResult = await saveResponse.json();
+        const savedWorkflowId = saveResult.workflowId || workflowId;
 
-          if (error) throw error;
-        } else {
-          const { data, error } = await supabase
-            .from('workflows')
-            .insert(workflowData)
-            .select()
-            .single();
+        if (!savedWorkflowId) {
+          throw new Error('Failed to get workflow ID after save');
+        }
 
-          if (error) throw error;
-
-          if (data) {
-            savedWorkflowId = data.id;
-            setWorkflowId(data.id);
-            navigate(`/workflow/${data.id}`, { replace: true });
-          }
+        // Update workflow ID in store if it's a new workflow
+        if (!workflowId && savedWorkflowId) {
+          setWorkflowId(savedWorkflowId);
+          navigate(`/workflow/${savedWorkflowId}`, { replace: true });
         }
 
         setIsDirty(false);
+        console.log(`[handleRun] ✅ Auto-saved workflow via /api/save-workflow - ID: ${savedWorkflowId}`);
       } catch (error) {
         console.error('Error auto-saving workflow:', error);
         toast({
@@ -366,6 +522,42 @@ export default function WorkflowBuilder() {
         title: 'Schedule is active',
         description: 'Manual Run is disabled when a schedule is active. The workflow is running automatically.',
         variant: 'default',
+      });
+      return;
+    }
+
+    // ✅ CRITICAL: Validate workflow before running
+    // This provides immediate feedback and prevents invalid workflows from being sent to backend
+    try {
+      const { normalizeWorkflowGraph } = await import('@/lib/graphNormalizer');
+      const { validateWorkflowGraph } = await import('@/lib/workflowGraphValidator');
+      
+      const normalized = normalizeWorkflowGraph(nodes, edges);
+      if (normalized.errors.length > 0) {
+        toast({
+          title: 'Validation Failed',
+          description: `Graph normalization errors: ${normalized.errors.join(', ')}`,
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      const validation = validateWorkflowGraph(normalized.nodes, normalized.edges);
+      if (!validation.valid) {
+        const errorMessages = validation.errors.map(e => e.message).join('; ');
+        toast({
+          title: 'Validation Failed',
+          description: `Workflow validation failed: ${errorMessages}`,
+          variant: 'destructive',
+        });
+        return;
+      }
+    } catch (validationError: any) {
+      console.error('[WorkflowBuilder] Validation error:', validationError);
+      toast({
+        title: 'Validation Error',
+        description: validationError?.message || 'Failed to validate workflow',
+        variant: 'destructive',
       });
       return;
     }
@@ -457,9 +649,41 @@ export default function WorkflowBuilder() {
             if (!response.ok) {
               const errorData = await response.json().catch(() => ({ error: 'Failed to start workflow' }));
               const errorMessage = errorData.error || errorData.message || 'Failed to start workflow';
-              const errorDetails = errorData.details ? ` Details: ${errorData.details}` : '';
-              console.error('[execute-workflow] Error response:', errorData);
-              throw new Error(`${errorMessage}${errorDetails}`);
+              const errorCode = errorData.code || 'UNKNOWN_ERROR';
+              const errorDetails = errorData.details ? JSON.stringify(errorData.details, null, 2) : '';
+              const errorHint = errorData.hint || '';
+              
+              // ✅ CRITICAL: Log full error details for debugging
+              console.error('[execute-workflow] ❌ Error response:', {
+                status: response.status,
+                code: errorCode,
+                error: errorMessage,
+                message: errorData.message,
+                phase: errorData.phase,
+                persistedStatus: errorData.persistedStatus,
+                details: errorData.details,
+                hint: errorHint,
+                fullError: errorData
+              });
+              
+              // Build detailed error message
+              let detailedMessage = errorMessage;
+              if (errorData.phase) {
+                detailedMessage += `\n\nCurrent Status: ${errorData.phase}`;
+              }
+              if (errorData.details) {
+                if (errorData.details.missingInputsCount > 0) {
+                  detailedMessage += `\n\nMissing Inputs: ${errorData.details.missingInputsCount}`;
+                }
+                if (errorData.details.missingCredentialsCount > 0) {
+                  detailedMessage += `\n\nMissing Credentials: ${errorData.details.missingCredentialsCount}`;
+                }
+              }
+              if (errorHint) {
+                detailedMessage += `\n\n💡 ${errorHint}`;
+              }
+              
+              throw new Error(detailedMessage);
             }
 
             toast({
@@ -489,6 +713,99 @@ export default function WorkflowBuilder() {
         });
         return;
       }
+    }
+
+    // ✅ CRITICAL: Auto-attach inputs from current workflow state before executing
+    // This ensures workflow status moves from "draft" to "ready_for_execution"
+    // NOTE: This operates on a CLONE of the graph - does not mutate React state
+    // ✅ RUNTIME SAFETY: Auto-attach never mutates the original graph
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      
+      // ✅ CRITICAL: Deep clone graph before any operations
+      // This ensures auto-attach never mutates the original React state
+      const clonedNodes = JSON.parse(JSON.stringify(nodes));
+      const clonedEdges = JSON.parse(JSON.stringify(edges));
+      
+      // ✅ CRITICAL: Normalize graph before extracting inputs (ensures consistent format)
+      const { normalizeWorkflowGraph } = await import('@/lib/graphNormalizer');
+      const normalized = normalizeWorkflowGraph(clonedNodes, clonedEdges);
+      
+      // Extract inputs from normalized nodes (clone, not original)
+      const inputsToAttach: Record<string, Record<string, any>> = {};
+      
+      normalized.nodes.forEach((node: any) => {
+        const nodeConfig = node.data?.config || {};
+        const nodeInputs: Record<string, any> = {};
+        
+        // ✅ CRITICAL: Handle If/Else conditions array format
+        if (node.data?.type === 'if_else' && nodeConfig.conditions) {
+          // If/Else: save conditions array as-is (already normalized)
+          if (Array.isArray(nodeConfig.conditions) && nodeConfig.conditions.length > 0) {
+            nodeInputs.conditions = nodeConfig.conditions;
+          }
+        } else {
+          // Other nodes: extract all non-empty config values as inputs
+          Object.keys(nodeConfig).forEach((key) => {
+            const value = nodeConfig[key];
+            // Skip empty values, credentials, and internal fields
+            if (value !== undefined && value !== null && value !== '' && 
+                !key.startsWith('_') && 
+                !key.includes('credential') && 
+                !key.includes('oauth')) {
+              nodeInputs[key] = value;
+            }
+          });
+        }
+        
+        // Only add node if it has inputs
+        if (Object.keys(nodeInputs).length > 0) {
+          inputsToAttach[node.id] = nodeInputs;
+        }
+      });
+      
+      console.log('[execute-workflow] ✅ Auto-attach operating on cloned graph (immutable)');
+      
+      // Attach inputs if any exist
+      if (Object.keys(inputsToAttach).length > 0) {
+        console.log('[execute-workflow] Auto-attaching inputs before execution:', inputsToAttach);
+        
+        const attachInputsResponse = await fetch(`${ENDPOINTS.itemBackend}/api/workflows/${finalWorkflowId}/attach-inputs`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(sessionData?.session?.access_token
+              ? { Authorization: `Bearer ${sessionData.session.access_token}` }
+              : {}),
+          },
+          body: JSON.stringify({
+            inputs: inputsToAttach,
+          }),
+        });
+        
+        if (!attachInputsResponse.ok) {
+          const attachError = await attachInputsResponse.json().catch(() => ({ error: 'Failed to attach inputs' }));
+          
+          // ✅ CRITICAL: Check if error is due to phase locking (workflow already configured)
+          // If workflow is already in ready_for_execution, skip attach and proceed to execution
+          if (attachError.code === 'PHASE_LOCKED' || 
+              attachError.code === 'INVALID_PHASE' ||
+              (attachError.currentPhase && ['ready_for_execution', 'executing'].includes(attachError.currentPhase))) {
+            console.log('[execute-workflow] Workflow already configured, skipping input attachment:', attachError.currentPhase);
+            // Continue to execution - workflow is already ready
+          } else {
+            console.warn('[execute-workflow] Failed to auto-attach inputs:', attachError);
+            // Continue anyway - execution endpoint will show the actual error
+          }
+        } else {
+          console.log('[execute-workflow] ✅ Inputs attached successfully');
+        }
+      } else {
+        console.log('[execute-workflow] No inputs to attach (workflow may not require inputs)');
+      }
+    } catch (attachError) {
+      console.warn('[execute-workflow] Error auto-attaching inputs (non-fatal):', attachError);
+      // Continue anyway - execution endpoint will show the actual error
     }
 
     // Reset all node statuses to 'idle' before starting new execution
@@ -527,9 +844,44 @@ export default function WorkflowBuilder() {
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Execution failed' }));
         const errorMessage = errorData.error || errorData.message || 'Execution failed';
-        const errorDetails = errorData.details ? ` Details: ${errorData.details}` : '';
-        console.error('[execute-workflow] Error response:', errorData);
-        throw new Error(`${errorMessage}${errorDetails}`);
+        const errorCode = errorData.code || 'UNKNOWN_ERROR';
+        const errorDetails = errorData.details ? JSON.stringify(errorData.details, null, 2) : '';
+        const errorHint = errorData.hint || '';
+        
+        // ✅ CRITICAL: Log full error details for debugging
+        console.error('[execute-workflow] ❌ Error response:', {
+          status: response.status,
+          code: errorCode,
+          error: errorMessage,
+          message: errorData.message,
+          phase: errorData.phase,
+          persistedStatus: errorData.persistedStatus,
+          details: errorData.details,
+          hint: errorHint,
+          fullError: errorData
+        });
+        
+        // Build detailed error message
+        let detailedMessage = errorMessage;
+        if (errorData.phase) {
+          detailedMessage += `\n\nCurrent Status: ${errorData.phase}`;
+        }
+        if (errorData.details) {
+          if (errorData.details.missingInputsCount > 0) {
+            detailedMessage += `\n\nMissing Inputs: ${errorData.details.missingInputsCount}`;
+          }
+          if (errorData.details.missingCredentialsCount > 0) {
+            detailedMessage += `\n\nMissing Credentials: ${errorData.details.missingCredentialsCount}`;
+          }
+          if (errorData.details.requiredCredentialsCount > 0) {
+            detailedMessage += `\n\nRequired Credentials: ${errorData.details.requiredCredentialsCount}`;
+          }
+        }
+        if (errorHint) {
+          detailedMessage += `\n\n💡 ${errorHint}`;
+        }
+        
+        throw new Error(detailedMessage);
       }
 
       const data = await response.json();
@@ -558,10 +910,38 @@ export default function WorkflowBuilder() {
       // The ExecutionConsole component will auto-update via realtime subscription
     } catch (error) {
       console.error('Execution error:', error);
+      
+      // ✅ CRITICAL: Show actual error message from backend
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : typeof error === 'string' 
+        ? error 
+        : 'Failed to execute workflow';
+      
+      // Extract error details if available
+      let errorTitle = 'Error';
+      let errorDescription = errorMessage;
+      
+      // Try to parse structured error if it's a string
+      if (typeof errorMessage === 'string') {
+        // Check if it contains error code
+        if (errorMessage.includes('EXECUTION_NOT_READY')) {
+          errorTitle = 'Workflow Not Ready';
+          errorDescription = errorMessage.split('\n\n')[0]; // First line only for toast
+        } else if (errorMessage.includes('EXECUTION_MISSING_INPUTS')) {
+          errorTitle = 'Missing Inputs';
+          errorDescription = errorMessage.split('\n\n')[0];
+        } else if (errorMessage.includes('EXECUTION_MISSING_CREDENTIALS')) {
+          errorTitle = 'Missing Credentials';
+          errorDescription = errorMessage.split('\n\n')[0];
+        }
+      }
+      
       toast({
-        title: 'Error',
-        description: 'Failed to execute workflow',
+        title: errorTitle,
+        description: errorDescription,
         variant: 'destructive',
+        duration: 10000, // Show longer for detailed errors
       });
     } finally {
       setIsRunning(false);

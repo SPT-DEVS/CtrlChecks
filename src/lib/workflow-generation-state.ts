@@ -29,6 +29,7 @@ export const ALLOWED_TRANSITIONS: Record<WorkflowGenerationState, WorkflowGenera
   [WorkflowGenerationState.STATE_3_UNDERSTANDING_CONFIRMED]: [
     WorkflowGenerationState.STATE_4_CREDENTIAL_COLLECTION,
     WorkflowGenerationState.STATE_2_CLARIFICATION_ACTIVE, // Allow going back to edit
+    WorkflowGenerationState.STATE_5_WORKFLOW_BUILDING, // Allow direct build if no credentials needed
   ],
   [WorkflowGenerationState.STATE_4_CREDENTIAL_COLLECTION]: [WorkflowGenerationState.STATE_5_WORKFLOW_BUILDING],
   [WorkflowGenerationState.STATE_5_WORKFLOW_BUILDING]: [
@@ -346,6 +347,94 @@ export class WorkflowGenerationStateManager {
    */
   getCurrentState(): WorkflowGenerationState {
     return this.executionState.current_state;
+  }
+
+  /**
+   * Ensure state is ready for building (transitions through intermediate states if needed)
+   */
+  ensureStateForBuilding(): { success: boolean; error?: string } {
+    const currentState = this.executionState.current_state;
+    
+    // 1. If in IDLE or PROMPT_RECEIVED, we can't build yet
+    if (currentState === WorkflowGenerationState.STATE_0_IDLE || 
+        currentState === WorkflowGenerationState.STATE_1_USER_PROMPT_RECEIVED) {
+      return { success: false, error: 'Cannot build: Understanding not confirmed' };
+    }
+
+    // 2. If in CLARIFICATION_ACTIVE, we need to confirm understanding first
+    if (currentState === WorkflowGenerationState.STATE_2_CLARIFICATION_ACTIVE) {
+      if (!this.executionState.final_understanding) {
+        return { success: false, error: 'Cannot build: Final understanding not set' };
+      }
+      const transitionResult = this.confirmUnderstanding(this.executionState.final_understanding);
+      if (!transitionResult.success) return transitionResult;
+    }
+
+    // Now we should be in STATE_3_UNDERSTANDING_CONFIRMED
+    const newState = this.executionState.current_state;
+
+    // 3. If in STATE_3, decide whether to go to 4 or 5
+    if (newState === WorkflowGenerationState.STATE_3_UNDERSTANDING_CONFIRMED) {
+      if (this.executionState.credentials_required.length > 0) {
+        // Must go through credential collection
+        const transitionResult = this.transitionTo(WorkflowGenerationState.STATE_4_CREDENTIAL_COLLECTION, 'Moving to credential collection');
+        if (!transitionResult.success) return transitionResult;
+      } else {
+        // Can go directly to building
+        return this.startBuilding();
+      }
+    }
+
+    // 4. If in STATE_4, start building
+    if (this.executionState.current_state === WorkflowGenerationState.STATE_4_CREDENTIAL_COLLECTION) {
+      return this.startBuilding();
+    }
+
+    // 5. If already in STATE_5 or higher, we're good (just log it)
+    if (this.executionState.current_state === WorkflowGenerationState.STATE_5_WORKFLOW_BUILDING ||
+        this.executionState.current_state === WorkflowGenerationState.STATE_6_WORKFLOW_VALIDATION ||
+        this.executionState.current_state === WorkflowGenerationState.STATE_7_WORKFLOW_READY) {
+      return { success: true };
+    }
+
+    return { success: false, error: `Invalid state for building: ${this.executionState.current_state}` };
+  }
+
+  /**
+   * Transition to validation state reliably from any build state
+   */
+  moveToValidation(blueprint: { nodes?: any[]; edges?: any[]; structure?: any }): { success: boolean; error?: string } {
+    const currentState = this.executionState.current_state;
+    
+    // If we're not in building state, try to get there
+    if (currentState !== WorkflowGenerationState.STATE_5_WORKFLOW_BUILDING) {
+      const buildResult = this.ensureStateForBuilding();
+      if (!buildResult.success) return buildResult;
+    }
+
+    this.executionState.workflow_blueprint = blueprint;
+    return this.transitionTo(WorkflowGenerationState.STATE_6_WORKFLOW_VALIDATION, 'Workflow blueprint generated');
+  }
+
+  /**
+   * Transition to ready state reliably
+   */
+  moveToReady(): { success: boolean; error?: string } {
+    const currentState = this.executionState.current_state;
+    
+    // If we're in validation state, just mark ready
+    if (currentState === WorkflowGenerationState.STATE_6_WORKFLOW_VALIDATION) {
+      return this.markWorkflowReady();
+    }
+    
+    // If we're in building state, move to validation first then ready
+    if (currentState === WorkflowGenerationState.STATE_5_WORKFLOW_BUILDING) {
+      const valResult = this.moveToValidation(this.executionState.workflow_blueprint);
+      if (!valResult.success) return valResult;
+      return this.markWorkflowReady();
+    }
+
+    return { success: false, error: `Cannot mark ready from state: ${currentState}` };
   }
 }
 

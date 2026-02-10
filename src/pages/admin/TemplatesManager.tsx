@@ -235,7 +235,7 @@ export default function TemplatesManager() {
                 <div className="space-y-2">
                   <Label htmlFor="category">Category *</Label>
                   <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}>
-                    <SelectTrigger>
+                    <SelectTrigger id="category">
                       <SelectValue placeholder="Select category" />
                     </SelectTrigger>
                     <SelectContent>
@@ -251,7 +251,7 @@ export default function TemplatesManager() {
                 <div className="space-y-2">
                   <Label htmlFor="difficulty">Difficulty</Label>
                   <Select value={formData.difficulty} onValueChange={(value: any) => setFormData({ ...formData, difficulty: value })}>
-                    <SelectTrigger>
+                    <SelectTrigger id="difficulty">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -402,7 +402,7 @@ export default function TemplatesManager() {
                   <div className="space-y-2">
                     <Label htmlFor="edit-category">Category *</Label>
                     <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}>
-                      <SelectTrigger>
+                    <SelectTrigger id="edit-category">
                         <SelectValue placeholder="Select category" />
                       </SelectTrigger>
                       <SelectContent>
@@ -418,7 +418,7 @@ export default function TemplatesManager() {
                   <div className="space-y-2">
                     <Label htmlFor="edit-difficulty">Difficulty</Label>
                     <Select value={formData.difficulty} onValueChange={(value: any) => setFormData({ ...formData, difficulty: value })}>
-                      <SelectTrigger>
+                      <SelectTrigger id="edit-difficulty">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>

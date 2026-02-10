@@ -172,7 +172,8 @@ export default function ConnectionsPanel() {
         options: {
           redirectTo: redirectUrl,
           queryParams: {
-            scope: 'openid profile email w_member_social w_organization_social',
+            // Request minimal required scopes for posting + basic profile/email
+            scope: 'r_liteprofile r_emailaddress w_member_social',
           },
         },
       });

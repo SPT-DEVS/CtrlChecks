@@ -1,7 +1,9 @@
 import { useWorkflowStore } from '@/stores/workflowStore';
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { getNodeDefinition, ConfigField } from './nodeTypes';
 import { NODE_USAGE_GUIDES } from './nodeUsageGuides';
+import { nodeSchemaService, NodeDefinition } from '@/services/nodeSchemaService';
+import { convertNodeDefinitionToConfigFields, validateNodeInputsAgainstSchema } from '@/lib/schemaConverter';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -32,6 +34,7 @@ import { useDroppable } from '@dnd-kit/core';
 import { useExpressionDropStore } from '@/stores/expressionDropStore';
 import { resolveExpression, detectExpressionType } from '@/lib/expressionResolver';
 import { InputGuideLink } from './InputGuideLink';
+import ConditionBuilder, { ConditionRule } from './ConditionBuilder';
 
 // Droppable field wrapper component - MUST be outside PropertiesPanel to avoid hook violations
 interface DroppableFieldWrapperProps {
@@ -108,6 +111,11 @@ export default function PropertiesPanel({ onClose, debugMode = false, debugInput
   const [isWorkflowActive, setIsWorkflowActive] = useState(false);
   const [isSavingActivation, setIsSavingActivation] = useState(false);
 
+  // ✅ SCHEMA-DRIVEN UI: Backend schema state
+  const [backendSchema, setBackendSchema] = useState<NodeDefinition | null>(null);
+  const [schemaLoading, setSchemaLoading] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+
   // AI Editor state
   const [aiMessages, setAiMessages] = useState<Message[]>([
     {
@@ -144,6 +152,72 @@ export default function PropertiesPanel({ onClose, debugMode = false, debugInput
       loadWorkflowStatus();
     }
   }, [selectedNode?.data.type, workflowId, loadWorkflowStatus]);
+
+  // ✅ SCHEMA-DRIVEN UI: Fetch backend schema when node is selected
+  useEffect(() => {
+    if (!selectedNode) {
+      setBackendSchema(null);
+      setValidationErrors({});
+      return;
+    }
+
+    const nodeType = selectedNode.data.type;
+    setSchemaLoading(true);
+    
+    nodeSchemaService.fetchSchemaByType(nodeType)
+      .then((schema) => {
+        if (schema) {
+          console.log(`[PropertiesPanel] ✅ Fetched backend schema for ${nodeType}:`, schema);
+          setBackendSchema(schema);
+          
+          // Validate current inputs against schema
+          const currentInputs = selectedNode.data.config || {};
+          const validation = validateNodeInputsAgainstSchema(schema, currentInputs);
+          
+          if (!validation.valid) {
+            const errorsMap: Record<string, string> = {};
+            validation.errors.forEach(err => {
+              errorsMap[err.field] = err.message;
+            });
+            setValidationErrors(errorsMap);
+            console.log(`[PropertiesPanel] ⚠️ Validation errors for ${nodeType}:`, errorsMap);
+          } else {
+            setValidationErrors({});
+            console.log(`[PropertiesPanel] ✅ Inputs valid for ${nodeType}`);
+          }
+        } else {
+          console.log(`[PropertiesPanel] ℹ️ No backend schema for ${nodeType}, using legacy configFields`);
+          setBackendSchema(null);
+          setValidationErrors({});
+        }
+      })
+      .catch((error) => {
+        console.error(`[PropertiesPanel] ❌ Error fetching schema for ${nodeType}:`, error);
+        setBackendSchema(null);
+        setValidationErrors({});
+      })
+      .finally(() => {
+        setSchemaLoading(false);
+      });
+  }, [selectedNode?.id, selectedNode?.data.type]);
+
+  // ✅ SCHEMA-DRIVEN UI: Re-validate when config changes
+  useEffect(() => {
+    if (!selectedNode || !backendSchema) return;
+
+    const currentInputs = selectedNode.data.config || {};
+    const validation = validateNodeInputsAgainstSchema(backendSchema, currentInputs);
+    
+    if (!validation.valid) {
+      const errorsMap: Record<string, string> = {};
+      validation.errors.forEach(err => {
+        errorsMap[err.field] = err.message;
+      });
+      setValidationErrors(errorsMap);
+    } else {
+      setValidationErrors({});
+    }
+  }, [selectedNode?.data.config, backendSchema]);
 
   // Auto-scroll AI messages
   useEffect(() => {
@@ -427,8 +501,11 @@ export default function PropertiesPanel({ onClose, debugMode = false, debugInput
     if (debugMode && pendingExpression && selectedNode) {
       const { fieldKey, expression } = pendingExpression;
       // Check if the field exists in the current node's config
-      const nodeDefinition = getNodeDefinition(selectedNode.data.type);
-      const field = nodeDefinition?.configFields?.find(f => f.key === fieldKey);
+      // ✅ SCHEMA-DRIVEN UI: Use backend schema if available
+      const nodeDef = backendSchema 
+        ? { configFields: convertNodeDefinitionToConfigFields(backendSchema) }
+        : getNodeDefinition(selectedNode.data.type);
+      const field = nodeDef?.configFields?.find(f => f.key === fieldKey);
 
       if (field) {
         updateNodeConfig(selectedNode.id, { [fieldKey]: expression });
@@ -502,6 +579,43 @@ export default function PropertiesPanel({ onClose, debugMode = false, debugInput
       </div>
     </div>
   );
+
+  // Selected node ID (may be undefined when no node is selected)
+  const selectedNodeId = selectedNode?.id;
+
+  // Config change handler – safe when no node is selected
+  const handleConfigChange = useCallback(
+    (key: string, value: unknown) => {
+      if (!selectedNodeId) return;
+      updateNodeConfig(selectedNodeId, { [key]: value });
+    },
+    [selectedNodeId, updateNodeConfig]
+  );
+
+  // Memoize available fields for condition builder – safe when no node is selected
+  const availableFieldsForConditions = useMemo(() => {
+    if (!selectedNodeId) return [];
+
+    const fields: string[] = [];
+    const prevNodes = nodes.filter(n => {
+      const nodeEdges = edges.filter(e => e.target === selectedNodeId);
+      return nodeEdges.some(e => e.source === n.id);
+    });
+
+    prevNodes.forEach(node => {
+      if (node.data?.type === 'manual_trigger') {
+        fields.push('input.age', 'input.name', 'input.email');
+      }
+      // Add more field extraction logic as needed
+    });
+
+    return fields;
+  }, [nodes, edges, selectedNodeId]);
+
+  // Stop event propagation to prevent ReactFlow from stealing focus
+  const handleInputMouseDown = (e: React.MouseEvent) => {
+    e.stopPropagation();
+  };
 
   // Render empty state (no node selected) - show toggle buttons and appropriate view
   if (!selectedNode) {
@@ -600,18 +714,29 @@ export default function PropertiesPanel({ onClose, debugMode = false, debugInput
     );
   }
 
-  const nodeDefinition = getNodeDefinition(selectedNode.data.type);
+  // ✅ SCHEMA-DRIVEN UI: Use backend schema if available, fallback to legacy
+  const legacyNodeDefinition = getNodeDefinition(selectedNode.data.type);
   const IconComponent = iconMap[selectedNode.data.icon || 'Box'] || Box;
 
-  const handleConfigChange = (key: string, value: unknown) => {
-    // Prevent focus loss by using stopPropagation on the update
-    updateNodeConfig(selectedNode.id, { [key]: value });
-  };
+  // Convert backend schema to configFields if available
+  const schemaConfigFields = backendSchema 
+    ? convertNodeDefinitionToConfigFields(backendSchema)
+    : null;
 
-  // Stop event propagation to prevent ReactFlow from stealing focus
-  const handleInputMouseDown = (e: React.MouseEvent) => {
-    e.stopPropagation();
-  };
+  // Use schema-based configFields if available, otherwise use legacy
+  const nodeDefinition = backendSchema && schemaConfigFields
+    ? {
+        ...legacyNodeDefinition,
+        configFields: schemaConfigFields,
+        // Mark as schema-driven for logging
+        _schemaDriven: true,
+      }
+    : legacyNodeDefinition;
+
+  // Log schema-driven status
+  if (backendSchema && schemaConfigFields) {
+    console.log(`[PropertiesPanel] 🎯 Rendering ${selectedNode.data.type} from backend schema (${schemaConfigFields.length} fields)`);
+  }
 
 
   // Get operation-specific helpText for Instagram node
@@ -803,7 +928,10 @@ export default function PropertiesPanel({ onClose, debugMode = false, debugInput
             value={value as string}
             onValueChange={(val) => handleConfigChange(field.key, val)}
           >
-            <SelectTrigger className="h-8 text-xs border-border/60 focus:ring-1 focus:ring-ring/50">
+            <SelectTrigger
+              id={field.key}
+              className="h-8 text-xs border-border/60 focus:ring-1 focus:ring-ring/50"
+            >
               <SelectValue placeholder={`Select ${field.label.toLowerCase()}`} />
             </SelectTrigger>
             <SelectContent>
@@ -1033,6 +1161,80 @@ export default function PropertiesPanel({ onClose, debugMode = false, debugInput
                     </div>
                   )}
 
+                  {/* Chat URL Display - Show when chat trigger node is selected */}
+                  {selectedNode.data.type === 'chat_trigger' && (
+                    <div className="space-y-4">
+                      <h3 className="text-xs font-medium uppercase text-muted-foreground/70 tracking-wide">
+                        Chat Settings
+                      </h3>
+                      <div className="space-y-3 p-3 bg-muted/30 rounded-sm border border-border/40">
+                        <div className="space-y-2.5">
+                          <div className="flex items-center gap-2">
+                            <Label className="text-xs font-medium text-foreground/90">Chat URL</Label>
+                            {!workflowId && (
+                              <span className="text-xs text-muted-foreground/70 font-medium">
+                                (Save workflow first)
+                              </span>
+                            )}
+                          </div>
+                          {workflowId ? (
+                            <>
+                              <div className="flex gap-2 items-center">
+                                <div className="flex-1 min-w-0 p-2 border border-border/40 rounded-sm bg-background">
+                                  <code className="text-xs font-mono break-all whitespace-normal text-foreground/80">
+                                    {`${window.location.origin}/chat/${workflowId}/${selectedNode.id}`}
+                                  </code>
+                                </div>
+                                <Button
+                                  variant="outline"
+                                  size="icon"
+                                  className="h-8 w-8 flex-shrink-0 border-border/60 hover:bg-muted/60"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const url = `${window.location.origin}/chat/${workflowId}/${selectedNode.id}`;
+                                    navigator.clipboard.writeText(url);
+                                    toast({
+                                      title: 'Copied!',
+                                      description: 'Chat URL copied to clipboard',
+                                    });
+                                  }}
+                                  title="Copy chat URL"
+                                >
+                                  <Copy className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="icon"
+                                  className="h-8 w-8 flex-shrink-0 border-border/60 hover:bg-muted/60"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const url = `${window.location.origin}/chat/${workflowId}/${selectedNode.id}`;
+                                    window.open(url, '_blank');
+                                  }}
+                                  title="Open chat in new tab"
+                                >
+                                  <ExternalLink className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                              <p className="text-xs text-muted-foreground/70 leading-relaxed">
+                                Share this URL to open the chat interface. Each message will trigger a new workflow execution (like webhook). Messages will appear in the execution console.
+                              </p>
+                              <div className="p-2.5 bg-muted/40 border border-border/40 rounded-sm">
+                                <p className="text-xs text-muted-foreground/80 leading-relaxed">
+                                  <strong className="font-medium">Note:</strong> The workflow must be saved and active for the chat to work. Each message creates a new workflow execution from the start.
+                                </p>
+                              </div>
+                            </>
+                          ) : (
+                            <div className="p-2.5 bg-muted/40 border border-border/40 rounded-sm text-xs text-muted-foreground/80">
+                              <strong className="font-medium">Save Required:</strong> Please save the workflow first to generate the chat link.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Form Node Settings */}
                   {selectedNode.data.type === 'form' ? (
                     <div className="space-y-4">
@@ -1070,7 +1272,7 @@ export default function PropertiesPanel({ onClose, debugMode = false, debugInput
                             }}
                           />
                         </div>
-                      ) : nodeDefinition.configFields.length > 0 ? (
+                      ) : (nodeDefinition.configFields && nodeDefinition.configFields.length > 0) ? (
                         <div className="space-y-4">
                           <h3 className="text-xs font-medium uppercase text-muted-foreground/70 tracking-wide">
                             Configuration
@@ -1087,13 +1289,44 @@ export default function PropertiesPanel({ onClose, debugMode = false, debugInput
                             const hasHelpLink = helpInfo !== null;
                             const hasDescription = effectiveHelpText && !hasHelpLink;
 
+                            // ✅ SCHEMA-DRIVEN UI: Get validation error for this field
+                            const fieldError = validationErrors[field.key];
+
                             return (
                               <div key={field.key} className="space-y-2">
                                 {/* Top - Heading */}
-                                <Label htmlFor={field.key} className="text-xs font-medium text-foreground/90 flex items-center gap-1">
-                                  {field.label}
-                                  {field.required && <span className="text-destructive/80">*</span>}
-                                </Label>
+                                {/* ✅ ACCESSIBILITY FIX: Only use htmlFor when there's a single input field */}
+                                {selectedNode.data.type === 'if_else' && field.key === 'conditions' ? (
+                                  <Label className="text-xs font-medium text-foreground/90 flex items-center gap-1">
+                                    {field.label}
+                                    {field.required && <span className="text-destructive/80">*</span>}
+                                    {/* ✅ SCHEMA-DRIVEN UI: Show schema-driven indicator */}
+                                    {backendSchema && (
+                                      <span className="ml-1 text-[10px] text-muted-foreground/50" title="Rendered from backend schema">
+                                        🎯
+                                      </span>
+                                    )}
+                                  </Label>
+                                ) : (
+                                  <Label htmlFor={field.key} className="text-xs font-medium text-foreground/90 flex items-center gap-1">
+                                    {field.label}
+                                    {field.required && <span className="text-destructive/80">*</span>}
+                                    {/* ✅ SCHEMA-DRIVEN UI: Show schema-driven indicator */}
+                                    {backendSchema && (
+                                      <span className="ml-1 text-[10px] text-muted-foreground/50" title="Rendered from backend schema">
+                                        🎯
+                                      </span>
+                                    )}
+                                  </Label>
+                                )}
+
+                                {/* ✅ SCHEMA-DRIVEN UI: Show validation error inline */}
+                                {fieldError && (
+                                  <p className="text-xs text-destructive/80 flex items-center gap-1">
+                                    <XCircle className="h-3 w-3" />
+                                    {fieldError}
+                                  </p>
+                                )}
 
                                 {/* Next - Description (if exists and not a help link) */}
                                 {hasDescription && (
@@ -1101,7 +1334,19 @@ export default function PropertiesPanel({ onClose, debugMode = false, debugInput
                                 )}
 
                                 {/* Next - Input Field */}
-                                {renderField(field)}
+                                {/* Special handling for If/Else conditions */}
+                                {selectedNode.data.type === 'if_else' && field.key === 'conditions' ? (
+                                  <ConditionBuilder
+                                    key={`condition-builder-${selectedNode.id}-${field.key}`}
+                                    value={(selectedNode.data.config || {})[field.key]}
+                                    onChange={(conditions: ConditionRule[]) => {
+                                      handleConfigChange(field.key, conditions);
+                                    }}
+                                    availableFields={availableFieldsForConditions}
+                                  />
+                                ) : (
+                                  renderField(field)
+                                )}
 
                                 {/* Last - User Manual Link at Right Side End */}
                                 {/* MANDATORY: Show guide link for ALL input fields (per requirements) */}

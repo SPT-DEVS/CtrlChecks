@@ -3602,35 +3602,6 @@ Output: {
     ],
   },
 
-  bitbucket: {
-    overview: 'Interact with Bitbucket API to manage repositories, pull requests, branches, commits, and pipelines. Supports Bitbucket Cloud operations. Perfect for Bitbucket automation or repository management.',
-    inputs: ['username', 'appPassword', 'workspace', 'repo', 'operation', 'data'],
-    outputs: ['result', 'data'],
-    example: `Operation: create_pull_request
-Workspace: my-workspace
-Repo: my-repo
-Data: {
-  "title": "New feature",
-  "source": {"branch": {"name": "feature-branch"}},
-  "destination": {"branch": {"name": "main"}}
-}
-
-Output: {
-  result: {
-    id: 1,
-    title: "New feature",
-    state: "OPEN"
-  }
-}`,
-    tips: [
-      'Use App Password from Bitbucket Settings → App passwords',
-      'Workspace is username or organization',
-      'Supports PRs, branches, commits, pipelines',
-      'Use for Bitbucket Cloud automation',
-      'App passwords required instead of personal access tokens',
-    ],
-  },
-
   docker: {
     overview: 'Connects to Docker to manage containers and images. Supports listing, building, tagging, pulling, pushing, and container lifecycle actions. Ideal for DevOps automation and repeatable environments.',
     inputs: ['host', 'port', 'operation', 'containerId', 'imageName', 'dockerfilePath', 'buildContext', 'tag', 'sourceTag', 'registry', 'registryUsername', 'registryPassword'],

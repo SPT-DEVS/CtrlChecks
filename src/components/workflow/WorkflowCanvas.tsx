@@ -21,6 +21,11 @@ const nodeTypes = {
   form: FormTriggerNode,
 };
 
+// Edge types - register custom edge types to prevent React Flow warnings
+// React Flow requires edge types to be registered if they're used in edges
+// We'll normalize all edge types to "default" in the styledEdges useMemo
+const edgeTypes = {};
+
 function WorkflowCanvasInner() {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const { screenToFlowPosition, fitView } = useReactFlow();
@@ -266,25 +271,48 @@ function WorkflowCanvasInner() {
   };
 
   // Add edge styling based on execution status (green for success, red for error)
+  // MANDATORY: Ensure all edges are visible and properly rendered
   const styledEdges = useMemo(() => {
     console.log(`[EdgeRender] Rendering ${edges.length} edges for ${nodes.length} nodes`);
-    
-    return edges.map((edge) => {
+
+    const validEdges = edges.map((edge) => {
       const sourceNode = nodes.find(n => n.id === edge.source);
       const targetNode = nodes.find(n => n.id === edge.target);
 
-      // Validate edge references exist
+      // CRITICAL: Only filter edges if nodes truly don't exist (not just missing)
+      // This ensures edges are preserved even if nodes are temporarily missing
       if (!sourceNode || !targetNode) {
         console.warn(`[EdgeRender] Edge ${edge.id} references missing node: source=${edge.source}, target=${edge.target}`);
-        return null;
+        // Don't return null - keep the edge but mark it as invalid
+        // ReactFlow will handle missing nodes gracefully
+        return {
+          ...edge,
+          id: edge.id || `edge-${edge.source}-${edge.target}`,
+          style: {
+            stroke: '#64748b',
+            strokeWidth: 2.5,
+            opacity: 0.5, // Dimmed but still visible
+            strokeDasharray: '5,5', // Dashed to indicate invalid connection
+          },
+        };
       }
 
       // CRITICAL FIX: Normalize handle IDs to match frontend node handles
       const sourceNodeType = sourceNode.data?.type || sourceNode.type;
       const targetNodeType = targetNode.data?.type || targetNode.type;
-      
-      const normalizedSourceHandle = normalizeHandleId(edge.sourceHandle, sourceNodeType, true);
-      const normalizedTargetHandle = normalizeHandleId(edge.targetHandle, targetNodeType, false);
+
+      // MANDATORY: Always provide valid handles - default to standard handles if missing
+      let normalizedSourceHandle = normalizeHandleId(edge.sourceHandle, sourceNodeType, true);
+      let normalizedTargetHandle = normalizeHandleId(edge.targetHandle, targetNodeType, false);
+
+      // FALLBACK: If normalization returns undefined, use defaults
+      if (!normalizedSourceHandle) {
+        normalizedSourceHandle = 'output';
+      }
+      if (!normalizedTargetHandle) {
+        // For AI Agent, default to userInput; for others, use input
+        normalizedTargetHandle = targetNodeType === 'ai_agent' ? 'userInput' : 'input';
+      }
 
       // Log edge normalization for debugging
       if (edge.sourceHandle !== normalizedSourceHandle || edge.targetHandle !== normalizedTargetHandle) {
@@ -297,41 +325,45 @@ function WorkflowCanvasInner() {
       const isSelected = selectedEdge?.id === edge.id;
 
       // Determine edge color based on execution status
-      // Use calm, light colors for default state
-      // Green/Red for success/fail as requested
-      let edgeColor = '#94a3b8'; // Calm light gray-blue (slate-400)
-      let strokeWidth = 2.5; // Moderate width for calm appearance
+      // MANDATORY: Use highly visible colors
+      let edgeColor = '#475569'; // Darker slate-600 for better visibility
+      let strokeWidth = 3; // Thicker for better visibility
 
       // Priority: Check execution status for green/red colors
       if (sourceNode?.data?.executionStatus === 'success' && targetNode?.data?.executionStatus !== 'error') {
-        // Green for successful execution path - soft green
-        edgeColor = '#4ade80'; // green-400 (softer than green-500)
-        strokeWidth = 3;
+        // Green for successful execution path
+        edgeColor = '#22c55e'; // green-500 (more visible)
+        strokeWidth = 3.5;
       } else if (sourceNode?.data?.executionStatus === 'error' || targetNode?.data?.executionStatus === 'error') {
-        // Red for error path - soft red
-        edgeColor = '#f87171'; // red-400 (softer than red-500)
-        strokeWidth = 3;
+        // Red for error path
+        edgeColor = '#ef4444'; // red-500 (more visible)
+        strokeWidth = 3.5;
       } else if (sourceNode?.data?.executionStatus === 'running' || targetNode?.data?.executionStatus === 'running') {
         // Light blue for running
-        edgeColor = '#60a5fa'; // blue-400 (calm blue)
-        strokeWidth = 2.5;
-      }
-
-      // Make selected edges slightly more visible but still calm
-      if (isSelected) {
+        edgeColor = '#3b82f6'; // blue-500 (more visible)
         strokeWidth = 3;
-        edgeColor = '#64748b'; // Slightly darker slate for selected
       }
 
-      // Add very subtle shadow for calm appearance
+      // Make selected edges more visible
+      if (isSelected) {
+        strokeWidth = 4;
+        edgeColor = '#1e293b'; // Very dark slate for selected
+      }
+
+      // MANDATORY: Force visibility with strong styling
       const edgeStyle: React.CSSProperties = {
         stroke: edgeColor,
         strokeWidth,
-        opacity: 0.9, // Slightly transparent for calm look
-        filter: isSelected 
-          ? 'drop-shadow(0 1px 2px rgba(100, 116, 139, 0.2))' // Subtle shadow for selected
-          : 'drop-shadow(0 1px 1px rgba(0, 0, 0, 0.08))', // Very subtle shadow
+        filter: isSelected
+          ? 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))' // Stronger shadow for selected
+          : 'drop-shadow(0 1px 2px rgba(0, 0, 0, 0.15))', // Visible shadow
+        // Force visibility
+        visibility: 'visible',
+        display: 'block',
+        pointerEvents: 'auto',
+        // Override any opacity from edge.style - set opacity after spreading to ensure it's not overridden
         ...edge.style,
+        opacity: 1, // Fully visible - MANDATORY (set after spread to override any opacity from edge.style)
       };
 
       // Determine if edge represents success or error path
@@ -345,51 +377,57 @@ function WorkflowCanvasInner() {
         target: edge.target,
         sourceHandle: normalizedSourceHandle,
         targetHandle: normalizedTargetHandle,
-        type: edge.type || 'default',
+        // ✅ CRITICAL: Normalize edge type to "default" to prevent React Flow warnings
+        // This ensures all edges use the registered default type, avoiding "edge type not found" errors
+        type: 'default', // Always use default type regardless of edge.type value
         style: edgeStyle,
         animated: sourceNode?.data?.executionStatus === 'running',
-        selected: isSelected, // Mark as selected for React Flow styling
+        selected: isSelected,
         data: {
           ...edge.data,
           success: isSuccess,
           error: isError,
         },
-        zIndex: isSelected ? 10 : 1, // Higher z-index for selected edges
+        zIndex: isSelected ? 10 : 2, // Higher z-index to ensure visibility
         markerEnd: {
           type: 'arrowclosed' as const,
           color: edgeColor,
-          width: isSelected ? 20 : 18, // Calm size for arrows
-          height: isSelected ? 20 : 18,
+          width: isSelected ? 22 : 20, // Larger arrows for visibility
+          height: isSelected ? 22 : 20,
         },
       };
-    }).filter(Boolean); // Remove null edges
-  }, [edges, nodes]);
+    });
+
+    // MANDATORY: Return all edges (don't filter out any)
+    console.log(`[EdgeRender] Returning ${validEdges.length} styled edges`);
+    return validEdges;
+  }, [edges, nodes, selectedEdge]);
 
   // Generate a key based on node IDs to force re-render when workflow changes
   // This ensures React Flow resets completely when switching workflows
-  const workflowKey = nodes.length > 0 
-    ? nodes.map(n => n.id).sort().join(',') 
+  const workflowKey = nodes.length > 0
+    ? nodes.map(n => n.id).sort().join(',')
     : 'empty';
-  
+
   // Check for and fix overlapping nodes when workflow loads
   useEffect(() => {
     if (nodes.length === 0) return;
-    
+
     const NODE_WIDTH = 280;
     const NODE_HEIGHT = 150;
     const MIN_SPACING = 10; // Reduced from 50 - only detect actual overlaps, not close nodes
-    
+
     let hasOverlaps = false;
     const adjustedNodes = nodes.map((node, index) => {
       let newPosition = { ...node.position };
-      
+
       // Check for overlaps with other nodes
       // Only detect actual overlaps (nodes touching or overlapping), not just close nodes
       for (let i = 0; i < index; i++) {
         const otherNode = nodes[i];
         const distanceX = Math.abs(newPosition.x - otherNode.position.x);
         const distanceY = Math.abs(newPosition.y - otherNode.position.y);
-        
+
         // Only adjust if nodes are actually overlapping (distance less than node size)
         // Reduced threshold to only catch true overlaps
         if (distanceX < NODE_WIDTH - MIN_SPACING && distanceY < NODE_HEIGHT - MIN_SPACING) {
@@ -401,13 +439,13 @@ function WorkflowCanvasInner() {
           }
         }
       }
-      
+
       return {
         ...node,
         position: newPosition,
       };
     });
-    
+
     // If overlaps were found, update nodes (only once per workflow load)
     if (hasOverlaps && workflowKey !== 'empty') {
       const timeoutId = setTimeout(() => {
@@ -419,7 +457,7 @@ function WorkflowCanvasInner() {
           }]);
         });
       }, 300);
-      
+
       return () => clearTimeout(timeoutId);
     }
   }, [workflowKey, nodes, onNodesChange]);
@@ -429,21 +467,25 @@ function WorkflowCanvasInner() {
     if (nodes.length > 0) {
       // Small delay to ensure nodes are rendered
       const timeoutId = setTimeout(() => {
-        fitView({ 
-          padding: 0.2, 
+        fitView({
+          padding: 0.2,
           duration: 300,
           includeHiddenNodes: false,
           minZoom: 0.1,
           maxZoom: 2
         });
       }, 200);
-      
+
       return () => clearTimeout(timeoutId);
     }
   }, [workflowKey, nodes.length, fitView]);
 
   return (
-    <div ref={reactFlowWrapper} className="w-full h-full" style={{ width: '100%', height: '100%' }}>
+    <div
+      ref={reactFlowWrapper}
+      className="w-full h-full min-h-[400px]"
+      style={{ width: '100%', height: '100%' }}
+    >
       <ReactFlow
         key={workflowKey}
         nodes={nodes}
@@ -458,6 +500,7 @@ function WorkflowCanvasInner() {
         onEdgeClick={onEdgeClick}
         onPaneClick={onPaneClick}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
         snapToGrid
         snapGrid={[16, 16]}
@@ -469,15 +512,17 @@ function WorkflowCanvasInner() {
         defaultEdgeOptions={{
           type: 'default',
           style: {
-            stroke: '#94a3b8', // Calm light gray-blue default
-            strokeWidth: 2.5,
-            opacity: 0.9,
+            stroke: '#475569', // Dark slate-600 for maximum visibility
+            strokeWidth: 3, // Thicker for visibility
+            opacity: 1, // Fully visible - MANDATORY
+            visibility: 'visible',
+            display: 'block',
           },
           markerEnd: {
             type: 'arrowclosed',
-            color: '#94a3b8',
-            width: 18,
-            height: 18,
+            color: '#475569',
+            width: 20, // Larger for visibility
+            height: 20,
           },
         }}
       >

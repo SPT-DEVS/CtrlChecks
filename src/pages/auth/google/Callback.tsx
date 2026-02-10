@@ -60,11 +60,20 @@ export default function GoogleAuthCallback() {
 
         toast({
           title: 'Success',
-          description: 'Google Sheets connected successfully!',
+          description: 'Google connected successfully!',
         });
 
-        // Successful redirect
-        navigate('/workflows');
+        // Check if we should return to a specific page (e.g., workflow wizard)
+        const urlParams = new URLSearchParams(window.location.search);
+        const returnTo = urlParams.get('returnTo');
+        
+        if (returnTo) {
+          // Return to the page that initiated OAuth
+          navigate(returnTo);
+        } else {
+          // Default redirect
+          navigate('/workflows');
+        }
         return true;
 
       } catch (err) {

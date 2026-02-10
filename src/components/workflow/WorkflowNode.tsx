@@ -28,12 +28,12 @@ type WorkflowNodeProps = Node<NodeData>;
 
 const WorkflowNode = memo(({ data, selected, id }: NodeProps<WorkflowNodeProps>) => {
   const { openDebug } = useDebugStore();
-  
+
   // Skip rendering form nodes - they use custom FormTriggerNode component
   if (data?.type === 'form') {
     return null;
   }
-  
+
   // Fallback for missing data fields
   if (!data) {
     console.warn('[WorkflowNode] Missing data prop');
@@ -45,13 +45,13 @@ const WorkflowNode = memo(({ data, selected, id }: NodeProps<WorkflowNodeProps>)
     e.preventDefault();
     openDebug(id);
   };
-  
+
   // Ensure required fields exist with fallbacks
   const nodeType = data.type || 'unknown';
   const nodeLabel = data.label || nodeType || 'Unknown Node';
   const nodeCategory = data.category || 'data';
   const nodeIcon = data.icon || 'Box';
-  
+
   const category = NODE_CATEGORIES.find((c) => c.id === nodeCategory);
   const IconComponent = iconMap[nodeIcon] || Box;
   const isIfElseNode = nodeType === 'if_else';
@@ -142,7 +142,7 @@ const WorkflowNode = memo(({ data, selected, id }: NodeProps<WorkflowNodeProps>)
             className="!w-3 !h-3 !bg-muted-foreground !border-2 !border-background"
             style={{ top: '50%', transform: 'translateY(-50%)' }}
           />
-          
+
           {/* Bottom Input Ports with Labels */}
           <div className="absolute bottom-0 left-0 right-0 flex justify-between items-end px-2 pb-1">
             {/* Chat Model* (left) */}
@@ -166,7 +166,7 @@ const WorkflowNode = memo(({ data, selected, id }: NodeProps<WorkflowNodeProps>)
                 <Plus className="h-2 w-2 text-muted-foreground/50 -mt-0.5" />
               </div>
             </div>
-            
+
             {/* Memory (middle) */}
             <div className="flex flex-col items-center relative" style={{ flex: 1 }}>
               <div className="relative mb-1">
@@ -188,7 +188,7 @@ const WorkflowNode = memo(({ data, selected, id }: NodeProps<WorkflowNodeProps>)
                 <Plus className="h-2 w-2 text-muted-foreground/50 -mt-0.5" />
               </div>
             </div>
-            
+
             {/* Tool (right) */}
             <div className="flex flex-col items-center relative" style={{ flex: 1 }}>
               <div className="relative mb-1">
@@ -211,7 +211,7 @@ const WorkflowNode = memo(({ data, selected, id }: NodeProps<WorkflowNodeProps>)
               </div>
             </div>
           </div>
-          
+
           {/* Output handle on right side (centered vertically) with visual connection indicator */}
           <div className="absolute right-0 top-1/2 transform -translate-y-1/2 translate-x-1/2 z-10">
             <Handle

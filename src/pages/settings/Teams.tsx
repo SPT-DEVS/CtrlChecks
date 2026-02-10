@@ -360,7 +360,7 @@ export default function TeamsSettings() {
                         <div className="space-y-2">
                           <Label htmlFor="invite_role">Role</Label>
                           <Select value={inviteRole} onValueChange={(v) => setInviteRole(v as TeamRole)}>
-                            <SelectTrigger>
+                            <SelectTrigger id="invite_role">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
